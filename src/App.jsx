@@ -5,12 +5,21 @@ import Produit from "./frontoffice/pages/Produit";
 import FormProduit from "./backoffice/pages/FormProduit";
 import ImportCsv from "./backoffice/pages/ImportCsv";
 import Login from "./backoffice/pages/Login";
+import ResetData from "./backoffice/pages/ResetData";
 import ProtectedRoute from "./shared/ProtectedRoute";
 
 function App() {
   return (
     <Routes>
       <Route path="/backoffice/login" element={<Login />} />
+      <Route
+        path="/backoffice/reset-data"
+        element={
+          <ProtectedRoute>
+            <ResetData />
+          </ProtectedRoute>
+        }
+      />
       <Route path="/produits/:id" element={<Produit />} />
       <Route
         path="/produits"
