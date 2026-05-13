@@ -7,9 +7,9 @@
 | 5 | Backoffice | Reset Data | Reset | Créer la page Reset avec un bouton de réinitialisation | Affichage | - | 5 min | 5 min | - | - |
 | 6 | Backoffice | Reset Data | Reset | Logique de réinitialisation (quelles données effacer, confirmation) | Métier | - | 30 min | 30 min | - | - |
 | 7 | Backoffice | Reset Data | Reset | Appel API Prestashop pour supprimer/réinitialiser les données | Intégration | - | 10 min | 10 min | - | - |
-| 8 | Backoffice | Import Data | Import | Créer la page Import avec 4 champs fichier (3 CSV + 1 ZIP) | Affichage | - | - | - | - | - |
-| 9 | Backoffice | Import Data | Import | Parsing/validation des fichiers CSV et ZIP côté client | Métier | - | - | - | - | - |
-| 10 | Backoffice | Import Data | Import | Envoi des données parsées vers l'API Prestashop (XML) | Intégration | - | - | - | - | - |
+| 8 | Backoffice | Import Data | Import | Créer la page Import avec 4 champs fichier (3 CSV + 1 ZIP) | Affichage | - | 30 min | 30 min | - | - |
+| 9 | Backoffice | Import Data | Import | Parsing/validation des fichiers CSV et ZIP côté client | Métier | - | 30 min | 30 min | - | - |
+| 10 | Backoffice | Import Data | Import | Envoi des données parsées vers l'API Prestashop (XML) | Intégration | - | 10 min | 10 min | - | - |
 | 11 | Backoffice | Commandes | Commandes | Créer la page tableau des commandes avec boutons d'action | Affichage | - | - | - | - | - |
 | 12 | Backoffice | Commandes | Commandes | Logique de changement d'état (paiement effectué / annulé) | Métier | - | - | - | - | - |
 | 13 | Backoffice | Commandes | Commandes | Appel API pour récupérer les commandes et modifier leur état | Intégration | - | - | - | - | - |
