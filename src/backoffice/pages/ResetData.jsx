@@ -52,6 +52,12 @@ const RESET_RESOURCES = [
     endpoint: "product_options",
     tag: "product_option",
   },
+  {
+    key: "product_images",
+    label: "Images produits",
+    endpoint: "images/products",
+    tag: "product",
+  },
   { key: "products", label: "Produits", endpoint: "products", tag: "product" },
   {
     key: "categories",
@@ -124,7 +130,10 @@ const ResetData = () => {
       };
 
       try {
-        const ids = await getAllIds(resource.endpoint, resource.tag);
+        const ids =
+          resource.key === "product_images"
+            ? await getAllIds("products", resource.tag)
+            : await getAllIds(resource.endpoint, resource.tag);
 
         if (ids.length === 0) {
           setProgression((prev) => ({ ...prev, [resource.key]: 100 }));
