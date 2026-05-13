@@ -4,9 +4,9 @@
 | 2 | Backoffice | Gestion Login | Login | Fonction de vérification login/mdp (logique JS) | Métier | - | 10 min | 10 min | - | - |
 | 3 | Backoffice | Gestion Login | Login | Appel de la fonction login lors de la soumission du formulaire | Intégration | - | 5 min | 5 min | - | - |
 | 4 | Backoffice | Gestion Login | Login | Protection des pages du backoffice (redirect si non authentifié) | Métier | - | 15 min | 15 min | - | - |
-| 5 | Backoffice | Reset Data | Reset | Créer la page Reset avec un bouton de réinitialisation | Affichage | - | - | - | - | - |
-| 6 | Backoffice | Reset Data | Reset | Logique de réinitialisation (quelles données effacer, confirmation) | Métier | - | - | - | - | - |
-| 7 | Backoffice | Reset Data | Reset | Appel API Prestashop pour supprimer/réinitialiser les données | Intégration | - | - | - | - | - |
+| 5 | Backoffice | Reset Data | Reset | Créer la page Reset avec un bouton de réinitialisation | Affichage | - | 5 min | 5 min | - | - |
+| 6 | Backoffice | Reset Data | Reset | Logique de réinitialisation (quelles données effacer, confirmation) | Métier | - | 30 min | 30 min | - | - |
+| 7 | Backoffice | Reset Data | Reset | Appel API Prestashop pour supprimer/réinitialiser les données | Intégration | - | 10 min | 10 min | - | - |
 | 8 | Backoffice | Import Data | Import | Créer la page Import avec 4 champs fichier (3 CSV + 1 ZIP) | Affichage | - | - | - | - | - |
 | 9 | Backoffice | Import Data | Import | Parsing/validation des fichiers CSV et ZIP côté client | Métier | - | - | - | - | - |
 | 10 | Backoffice | Import Data | Import | Envoi des données parsées vers l'API Prestashop (XML) | Intégration | - | - | - | - | - |
