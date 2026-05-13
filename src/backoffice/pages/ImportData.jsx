@@ -180,6 +180,19 @@ const ImportData = () => {
     return node?.getAttribute("id") || "";
   };
 
+  const fetchIdByFilters = async (endpoint, tag, filters) => {
+    const query = Object.entries(filters)
+      .map(
+        ([key, value]) =>
+          `filter[${key}]=[${encodeURIComponent(value)}]`,
+      )
+      .join("&");
+    const xmlText = await requestXml(`${endpoint}?${query}&display=[id]`);
+    const dom = parseXmlDoc(xmlText);
+    const node = dom.querySelector(tag);
+    return node?.getAttribute("id") || "";
+  };
+
   const ensureTaxSetup = async (rate) => {
     const name = `TVA ${rate}%`;
     let taxId = await fetchIdByFilter("taxes", "tax", "name", name);
@@ -191,6 +204,7 @@ const ImportData = () => {
     <active><![CDATA[1]]></active>
     <name>
       <language id="1"><![CDATA[${name}]]></language>
+      <language id="2"><![CDATA[${name}]]></language>
     </name>
   </tax>
 </prestashop>`;
@@ -215,7 +229,13 @@ const ImportData = () => {
       groupId = await postXml("tax_rule_groups", xml);
     }
 
-    const ruleXml = `<?xml version="1.0" encoding="UTF-8"?>
+    const existingRuleId = await fetchIdByFilters(
+      "tax_rules",
+      "tax_rule",
+      { id_tax_rules_group: groupId, id_tax: taxId },
+    );
+    if (!existingRuleId) {
+      const ruleXml = `<?xml version="1.0" encoding="UTF-8"?>
 <prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
   <tax_rule>
     <id_tax_rules_group><![CDATA[${groupId}]]></id_tax_rules_group>
@@ -223,7 +243,8 @@ const ImportData = () => {
     <id_country><![CDATA[8]]></id_country>
   </tax_rule>
 </prestashop>`;
-    await postXml("tax_rules", ruleXml);
+      await postXml("tax_rules", ruleXml);
+    }
 
     return groupId;
   };
@@ -232,6 +253,7 @@ const ImportData = () => {
     let id = await fetchIdByFilter("categories", "category", "name", name);
     if (id) return id;
 
+    const slug = slugify(name);
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
   <category>
@@ -239,12 +261,15 @@ const ImportData = () => {
     <id_parent><![CDATA[2]]></id_parent>
     <name>
       <language id="1"><![CDATA[${name}]]></language>
+      <language id="2"><![CDATA[${name}]]></language>
     </name>
     <link_rewrite>
-      <language id="1"><![CDATA[${slugify(name)}]]></language>
+      <language id="1"><![CDATA[${slug}]]></language>
+      <language id="2"><![CDATA[${slug}]]></language>
     </link_rewrite>
     <description>
       <language id="1"><![CDATA[${name}]]></language>
+      <language id="2"><![CDATA[${name}]]></language>
     </description>
   </category>
 </prestashop>`;
@@ -277,15 +302,19 @@ const ImportData = () => {
     <product_type><![CDATA[${type}]]></product_type>
     <name>
       <language id="1"><![CDATA[${product.name}]]></language>
+      <language id="2"><![CDATA[${product.name}]]></language>
     </name>
     <description>
       <language id="1"><![CDATA[${product.name}]]></language>
+      <language id="2"><![CDATA[${product.name}]]></language>
     </description>
     <description_short>
       <language id="1"><![CDATA[${product.name}]]></language>
+      <language id="2"><![CDATA[${product.name}]]></language>
     </description_short>
     <link_rewrite>
       <language id="1"><![CDATA[${slugify(product.name)}]]></language>
+      <language id="2"><![CDATA[${slugify(product.name)}]]></language>
     </link_rewrite>
     <associations>
       <categories>
@@ -315,9 +344,11 @@ const ImportData = () => {
     <group_type><![CDATA[${groupType}]]></group_type>
     <name>
       <language id="1"><![CDATA[${name}]]></language>
+      <language id="2"><![CDATA[${name}]]></language>
     </name>
     <public_name>
       <language id="1"><![CDATA[${name}]]></language>
+      <language id="2"><![CDATA[${name}]]></language>
     </public_name>
   </product_option>
 </prestashop>`;
@@ -343,6 +374,7 @@ const ImportData = () => {
     ${colorTag}
     <name>
       <language id="1"><![CDATA[${name}]]></language>
+      <language id="2"><![CDATA[${name}]]></language>
     </name>
   </product_option_value>
 </prestashop>`;
