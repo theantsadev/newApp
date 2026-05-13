@@ -1,9 +1,9 @@
 | Ligne | Catégorie | Module | Page | Description tâche | Type | Qui | Estimation | Temps passé | Reste à faire | Avancement |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Backoffice | Gestion Login | Login | Créer le formulaire Login (champs login/mdp pré-remplis par défaut) | Affichage | - | - | - | - | - |
-| 2 | Backoffice | Gestion Login | Login | Fonction de vérification login/mdp (logique JS) | Métier | - | - | - | - | - |
-| 3 | Backoffice | Gestion Login | Login | Appel de la fonction login lors de la soumission du formulaire | Intégration | - | - | - | - | - |
-| 4 | Backoffice | Gestion Login | Login | Protection des pages du backoffice (redirect si non authentifié) | Métier | - | - | - | - | - |
+| 1 | Backoffice | Gestion Login | Login | Créer le formulaire Login (champs login/mdp pré-remplis par défaut) | Affichage | - | 5 min | 5 min | - | - |
+| 2 | Backoffice | Gestion Login | Login | Fonction de vérification login/mdp (logique JS) | Métier | - | 10 min | 10 min | - | - |
+| 3 | Backoffice | Gestion Login | Login | Appel de la fonction login lors de la soumission du formulaire | Intégration | - | 5 min | 5 min | - | - |
+| 4 | Backoffice | Gestion Login | Login | Protection des pages du backoffice (redirect si non authentifié) | Métier | - | 15 min | 15 min | - | - |
 | 5 | Backoffice | Reset Data | Reset | Créer la page Reset avec un bouton de réinitialisation | Affichage | - | - | - | - | - |
 | 6 | Backoffice | Reset Data | Reset | Logique de réinitialisation (quelles données effacer, confirmation) | Métier | - | - | - | - | - |
 | 7 | Backoffice | Reset Data | Reset | Appel API Prestashop pour supprimer/réinitialiser les données | Intégration | - | - | - | - | - |
