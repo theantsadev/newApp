@@ -1,0 +1,89 @@
+# REST Client equivalent of demo_custom_resource_collection.json
+# The PrestaShop webservice uses Basic Auth.
+# Set webservice_basic_auth to base64("YOUR_WEBSERVICE_KEY:") before running the requests.
+# In REST Client, the header becomes: Authorization: Basic {{webservice_basic_auth}}
+
+@webservice_url = http://localhost:70/prestashop
+@webservice_basic_auth = Qkc4RURGRTROQkU3QVdTNUVGQzEyNEY5VVBOUFdJVDI6
+@articleId = 1
+
+### Get all articles
+GET {{webservice_url}}/api/articles
+Authorization: Basic {{webservice_basic_auth}}
+
+### Get article blank schema
+GET {{webservice_url}}/api/articles?schema=blank
+Authorization: Basic {{webservice_basic_auth}}
+
+### Create article
+POST {{webservice_url}}/api/articles
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+    <article>
+        <title>
+            <language id="1">
+                <![CDATA[My title in english]]>
+            </language>
+            <language id="2">
+                <![CDATA[Mon titre en français]]>
+            </language>
+        </title>
+        <type>
+            <![CDATA[Blog post]]>
+        </type>
+    </article>
+</prestashop>
+
+### Get article
+GET {{webservice_url}}/api/articles/{{articleId}}
+Authorization: Basic {{webservice_basic_auth}}
+
+### Get article as JSON
+GET {{webservice_url}}/api/articles/{{articleId}}?io_format=JSON
+Authorization: Basic {{webservice_basic_auth}}
+Accept: application/json
+
+### Update article - complete update
+PUT {{webservice_url}}/api/articles/{{articleId}}
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+    <article>
+        <id><![CDATA[{{articleId}}]]></id>
+        <type><![CDATA[Blog post upd]]></type>
+        <title>
+            <language id="1"><![CDATA[My title in english]]></language>
+            <language id="2"><![CDATA[Mon titre en français]]></language>
+        </title>
+    </article>
+</prestashop>
+
+### Update article - partial update
+PATCH {{webservice_url}}/api/articles/{{articleId}}
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+    <article>
+        <id><![CDATA[{{articleId}}]]></id>
+        <type><![CDATA[Only this attribute is updated]]></type>
+    </article>
+</prestashop>
+
+### Delete article
+DELETE {{webservice_url}}/api/articles/{{articleId}}
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+    <article>
+        <id><![CDATA[{{articleId}}]]></id>
+    </article>
+</prestashop>

@@ -1,0 +1,587 @@
+# =============================================================================
+# CONFIGURATION
+# =============================================================================
+
+@webservice_url = http://localhost:70/prestashop
+@webservice_basic_auth = SFRXV1pBUUdTOTFMUUsyTkE2N0RCUzRMWjVFR1JORks6
+
+
+
+
+# =============================================================================
+# DONNEES DE REFERENCE
+# =============================================================================
+# référence | spécificité | déclinaison | stock | prix_TTC
+# T_01      | taille      | ngoza       | 13    | 12,50 €  (prix de base)
+# T_01      | taille      | kely        | 10    | 15,00 €  (supplément +2,23 HT)
+# P_01      | couleur     | mainty      | 5     | 23,49 €  (supplément +4,03 HT)
+# P_01      | couleur     | fotsy       | 3     | 18,99 €  (prix de base)
+# C_03      | —           | —           | 10    | 5,00 €   (sans déclinaison)
+# M_02      | —           | —           | 11    | 56,00 €  (sans déclinaison)
+#
+# Calcul des suppléments HT :
+#   T_01 kely   : 15,00 / 1,1165 - 11,20 = 13,43 - 11,20 = +2,23 HT
+#   P_01 mainty : 23,49 / 1,1165 - 17,01 = 21,04 - 17,01 = +4,03 HT
+# =============================================================================
+
+
+
+
+# =============================================================================
+# ETAPE 1 - RECUPERATION DES IDS PRODUITS
+# =============================================================================
+# On filtre par référence pour récupérer l'id interne de chaque produit.
+
+#### 1.1 - Id produit T_01
+GET {{webservice_url}}/api/products?filter[reference]=[T_01]&display=[id]
+Authorization: Basic {{webservice_basic_auth}}
+### => id_product_T01 = 20
+
+@id_product_T01 = 20
+
+###
+
+#### 1.2 - Id produit P_01
+GET {{webservice_url}}/api/products?filter[reference]=[P_01]&display=[id]
+Authorization: Basic {{webservice_basic_auth}}
+### => id_product_P01 = 21
+
+@id_product_P01 = 21
+
+###
+
+#### 1.3 - Id produit C_03
+GET {{webservice_url}}/api/products?filter[reference]=[C_03]&display=[id]
+Authorization: Basic {{webservice_basic_auth}}
+### => id_product_C03 = 22
+
+@id_product_C03 = 22
+
+###
+
+#### 1.4 - Id produit M_02
+GET {{webservice_url}}/api/products?filter[reference]=[M_02]&display=[id]
+Authorization: Basic {{webservice_basic_auth}}
+### => id_product_M02 = 23
+
+@id_product_M02 = 23
+
+###
+
+
+
+
+# =============================================================================
+# ETAPE 2 - CREATION DES OPTIONS (attributs de déclinaison)
+# =============================================================================
+# Un product_option = un groupe d'attributs (ex: "taille", "couleur").
+# group_type valeurs acceptées : "select", "radio", "color"
+# is_color_group = 1 uniquement pour le type "color".
+
+#### 2.1 - Option "taille" (liste déroulante)
+POST {{webservice_url}}/api/product_options
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <product_option>
+    <is_color_group><![CDATA[0]]></is_color_group>
+    <group_type><![CDATA[select]]></group_type>
+    <name>
+      <language id="1"><![CDATA[taille]]></language>
+    </name>
+    <public_name>
+      <language id="1"><![CDATA[taille]]></language>
+    </public_name>
+  </product_option>
+</prestashop>
+### => id_option_taille = 5
+
+@id_option_taille = 5
+
+###
+
+#### 2.2 - Option "couleur" (sélecteur de couleur)
+POST {{webservice_url}}/api/product_options
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <product_option>
+    <is_color_group><![CDATA[1]]></is_color_group>
+    <group_type><![CDATA[color]]></group_type>
+    <name>
+      <language id="1"><![CDATA[couleur]]></language>
+    </name>
+    <public_name>
+      <language id="1"><![CDATA[couleur]]></language>
+    </public_name>
+  </product_option>
+</prestashop>
+### => id_option_couleur = 6
+
+@id_option_couleur = 6
+
+###
+
+
+
+
+# =============================================================================
+# ETAPE 2 BIS - CORRECTION DES OPTIONS (si déjà créées avec un mauvais group_type)
+# =============================================================================
+# A exécuter UNIQUEMENT si les options ont été créées avec group_type incorrect.
+# PUT remplace l'intégralité de la ressource.
+
+#### 2B.1 - Correction group_type taille → "select"
+PUT {{webservice_url}}/api/product_options/{{id_option_taille}}
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <product_option>
+    <id><![CDATA[{{id_option_taille}}]]></id>
+    <is_color_group><![CDATA[0]]></is_color_group>
+    <group_type><![CDATA[select]]></group_type>
+    <name>
+      <language id="1"><![CDATA[taille]]></language>
+    </name>
+    <public_name>
+      <language id="1"><![CDATA[taille]]></language>
+    </public_name>
+  </product_option>
+</prestashop>
+
+###
+
+#### 2B.2 - Correction group_type couleur → "color"
+PUT {{webservice_url}}/api/product_options/{{id_option_couleur}}
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <product_option>
+    <id><![CDATA[{{id_option_couleur}}]]></id>
+    <is_color_group><![CDATA[1]]></is_color_group>
+    <group_type><![CDATA[color]]></group_type>
+    <name>
+      <language id="1"><![CDATA[couleur]]></language>
+    </name>
+    <public_name>
+      <language id="1"><![CDATA[couleur]]></language>
+    </public_name>
+  </product_option>
+</prestashop>
+
+###
+
+
+
+
+# =============================================================================
+# ETAPE 3 - CREATION DES VALEURS D'OPTIONS (product_option_values)
+# =============================================================================
+# Une valeur = une déclinaison concrète (ex: "ngoza", "kely", "fotsy", "mainty").
+# id_attribute_group = id de l'option parente (taille ou couleur).
+# Le champ color (hex) est requis uniquement pour les valeurs de type couleur.
+
+#### 3.1 - Valeur taille : ngoza (grande taille)
+POST {{webservice_url}}/api/product_option_values
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <product_option_value>
+    <id_attribute_group><![CDATA[{{id_option_taille}}]]></id_attribute_group>
+    <name>
+      <language id="1"><![CDATA[ngoza]]></language>
+    </name>
+  </product_option_value>
+</prestashop>
+### => id_val_ngoza = 26
+
+@id_val_ngoza = 26
+
+###
+
+#### 3.2 - Valeur taille : kely (petite taille)
+POST {{webservice_url}}/api/product_option_values
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <product_option_value>
+    <id_attribute_group><![CDATA[{{id_option_taille}}]]></id_attribute_group>
+    <name>
+      <language id="1"><![CDATA[kely]]></language>
+    </name>
+  </product_option_value>
+</prestashop>
+### => id_val_kely = 27
+
+@id_val_kely = 27
+
+###
+
+#### 3.3 - Valeur couleur : fotsy (blanc #FFFFFF)
+POST {{webservice_url}}/api/product_option_values
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <product_option_value>
+    <id_attribute_group><![CDATA[{{id_option_couleur}}]]></id_attribute_group>
+    <color><![CDATA[#FFFFFF]]></color>
+    <name>
+      <language id="1"><![CDATA[fotsy]]></language>
+    </name>
+  </product_option_value>
+</prestashop>
+### => id_val_fotsy = 28
+
+@id_val_fotsy = 28
+
+###
+
+#### 3.4 - Valeur couleur : mainty (noir #000000)
+POST {{webservice_url}}/api/product_option_values
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <product_option_value>
+    <id_attribute_group><![CDATA[{{id_option_couleur}}]]></id_attribute_group>
+    <color><![CDATA[#000000]]></color>
+    <name>
+      <language id="1"><![CDATA[mainty]]></language>
+    </name>
+  </product_option_value>
+</prestashop>
+### => id_val_mainty = 29
+
+@id_val_mainty = 29
+
+###
+
+
+
+
+# =============================================================================
+# ETAPE 4 - CREATION DES COMBINATIONS (déclinaisons produit)
+# =============================================================================
+# Une combination = une variante concrète d'un produit (produit + valeur d'option).
+# price = supplément HT par rapport au prix de base du produit (0.00 si prix de base).
+# default_on = 1 pour la déclinaison affichée par défaut sur la fiche produit.
+
+#### 4.1 - T_01 / ngoza - prix de base (supplément 0,00)
+POST {{webservice_url}}/api/combinations
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <combination>
+    <id_product><![CDATA[{{id_product_T01}}]]></id_product>
+    <reference><![CDATA[T_01-ngoza]]></reference>
+    <price><![CDATA[0.00]]></price>
+    <minimal_quantity><![CDATA[1]]></minimal_quantity>
+    <default_on><![CDATA[1]]></default_on>
+    <associations>
+      <product_option_values>
+        <product_option_value><id><![CDATA[{{id_val_ngoza}}]]></id></product_option_value>
+      </product_option_values>
+    </associations>
+  </combination>
+</prestashop>
+### => id_comb_ngoza = 40
+
+@id_comb_ngoza = 40
+
+###
+
+#### 4.2 - T_01 / kely - supplément +2,23 HT (→ 15,00 TTC)
+POST {{webservice_url}}/api/combinations
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <combination>
+    <id_product><![CDATA[{{id_product_T01}}]]></id_product>
+    <reference><![CDATA[T_01-kely]]></reference>
+    <price><![CDATA[2.23]]></price>
+    <minimal_quantity><![CDATA[1]]></minimal_quantity>
+    <default_on><![CDATA[0]]></default_on>
+    <associations>
+      <product_option_values>
+        <product_option_value><id><![CDATA[{{id_val_kely}}]]></id></product_option_value>
+      </product_option_values>
+    </associations>
+  </combination>
+</prestashop>
+### => id_comb_kely = 41
+
+@id_comb_kely = 41
+
+###
+
+#### 4.3 - P_01 / fotsy - prix de base (supplément 0,00)
+POST {{webservice_url}}/api/combinations
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <combination>
+    <id_product><![CDATA[{{id_product_P01}}]]></id_product>
+    <reference><![CDATA[P_01-fotsy]]></reference>
+    <price><![CDATA[0.00]]></price>
+    <minimal_quantity><![CDATA[1]]></minimal_quantity>
+    <default_on><![CDATA[1]]></default_on>
+    <associations>
+      <product_option_values>
+        <product_option_value><id><![CDATA[{{id_val_fotsy}}]]></id></product_option_value>
+      </product_option_values>
+    </associations>
+  </combination>
+</prestashop>
+### => id_comb_fotsy = 42
+
+@id_comb_fotsy = 42
+
+###
+
+#### 4.4 - P_01 / mainty - supplément +4,03 HT (→ 23,49 TTC)
+POST {{webservice_url}}/api/combinations
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <combination>
+    <id_product><![CDATA[{{id_product_P01}}]]></id_product>
+    <reference><![CDATA[P_01-mainty]]></reference>
+    <price><![CDATA[4.03]]></price>
+    <minimal_quantity><![CDATA[1]]></minimal_quantity>
+    <default_on><![CDATA[0]]></default_on>
+    <associations>
+      <product_option_values>
+        <product_option_value><id><![CDATA[{{id_val_mainty}}]]></id></product_option_value>
+      </product_option_values>
+    </associations>
+  </combination>
+</prestashop>
+### => id_comb_mainty = 43
+
+@id_comb_mainty = 43
+
+###
+
+
+
+
+# =============================================================================
+# ETAPE 5 - RECUPERATION DES IDS STOCK_AVAILABLES
+# =============================================================================
+# PrestaShop crée automatiquement un stock_available pour chaque combination.
+# On filtre par id_product + id_product_attribute pour récupérer l'id du stock.
+# Pour les produits sans déclinaison : id_product_attribute = 0.
+
+#### 5.1 - Stock T_01 / ngoza (combination 40)
+GET {{webservice_url}}/api/stock_availables?filter[id_product]=[{{id_product_T01}}]&filter[id_product_attribute]=[{{id_comb_ngoza}}]&display=[id]
+Authorization: Basic {{webservice_basic_auth}}
+### => id_stock_ngoza = 63
+
+@id_stock_ngoza = 63
+
+###
+
+#### 5.2 - Stock T_01 / kely (combination 41)
+GET {{webservice_url}}/api/stock_availables?filter[id_product]=[{{id_product_T01}}]&filter[id_product_attribute]=[{{id_comb_kely}}]&display=[id]
+Authorization: Basic {{webservice_basic_auth}}
+### => id_stock_kely = 64
+
+@id_stock_kely = 64
+
+###
+
+#### 5.3 - Stock P_01 / fotsy (combination 42)
+GET {{webservice_url}}/api/stock_availables?filter[id_product]=[{{id_product_P01}}]&filter[id_product_attribute]=[{{id_comb_fotsy}}]&display=[id]
+Authorization: Basic {{webservice_basic_auth}}
+### => id_stock_fotsy = 65
+
+@id_stock_fotsy = 65
+
+###
+
+#### 5.4 - Stock P_01 / mainty (combination 43)
+GET {{webservice_url}}/api/stock_availables?filter[id_product]=[{{id_product_P01}}]&filter[id_product_attribute]=[{{id_comb_mainty}}]&display=[id]
+Authorization: Basic {{webservice_basic_auth}}
+### => id_stock_mainty = 66
+
+@id_stock_mainty = 66
+
+###
+
+#### 5.5 - Stock C_03 (sans déclinaison → id_product_attribute = 0)
+GET {{webservice_url}}/api/stock_availables?filter[id_product]=[{{id_product_C03}}]&filter[id_product_attribute]=[0]&display=[id]
+Authorization: Basic {{webservice_basic_auth}}
+### => id_stock_c03 = 61
+
+@id_stock_c03 = 61
+
+###
+
+#### 5.6 - Stock M_02 (sans déclinaison → id_product_attribute = 0)
+GET {{webservice_url}}/api/stock_availables?filter[id_product]=[{{id_product_M02}}]&filter[id_product_attribute]=[0]&display=[id]
+Authorization: Basic {{webservice_basic_auth}}
+### => id_stock_m02 = 62
+
+@id_stock_m02 = 62
+
+###
+
+
+
+
+# =============================================================================
+# ETAPE 6 - MISE A JOUR DES STOCKS
+# =============================================================================
+# quantity        = stock initial à définir.
+# depends_on_stock = 0 = gestion manuelle (pas via entrepôt avancé).
+# out_of_stock    = 1 = autoriser la commande même en rupture de stock
+#                       (nécessaire pour que le sélecteur de déclinaison reste visible).
+
+#### 6.1 - Stock T_01 / ngoza → 13
+PATCH {{webservice_url}}/api/stock_availables/{{id_stock_ngoza}}
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <stock_available>
+    <id><![CDATA[{{id_stock_ngoza}}]]></id>
+    <id_product><![CDATA[{{id_product_T01}}]]></id_product>
+    <id_product_attribute><![CDATA[{{id_comb_ngoza}}]]></id_product_attribute>
+    <quantity><![CDATA[13]]></quantity>
+    <depends_on_stock><![CDATA[0]]></depends_on_stock>
+    <out_of_stock><![CDATA[1]]></out_of_stock>
+  </stock_available>
+</prestashop>
+
+###
+
+#### 6.2 - Stock T_01 / kely → 10
+PATCH {{webservice_url}}/api/stock_availables/{{id_stock_kely}}
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <stock_available>
+    <id><![CDATA[{{id_stock_kely}}]]></id>
+    <id_product><![CDATA[{{id_product_T01}}]]></id_product>
+    <id_product_attribute><![CDATA[{{id_comb_kely}}]]></id_product_attribute>
+    <quantity><![CDATA[10]]></quantity>
+    <depends_on_stock><![CDATA[0]]></depends_on_stock>
+    <out_of_stock><![CDATA[1]]></out_of_stock>
+  </stock_available>
+</prestashop>
+
+###
+
+#### 6.3 - Stock P_01 / fotsy → 3
+PATCH {{webservice_url}}/api/stock_availables/{{id_stock_fotsy}}
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <stock_available>
+    <id><![CDATA[{{id_stock_fotsy}}]]></id>
+    <id_product><![CDATA[{{id_product_P01}}]]></id_product>
+    <id_product_attribute><![CDATA[{{id_comb_fotsy}}]]></id_product_attribute>
+    <quantity><![CDATA[3]]></quantity>
+    <depends_on_stock><![CDATA[0]]></depends_on_stock>
+    <out_of_stock><![CDATA[1]]></out_of_stock>
+  </stock_available>
+</prestashop>
+
+###
+
+#### 6.4 - Stock P_01 / mainty → 5
+PATCH {{webservice_url}}/api/stock_availables/{{id_stock_mainty}}
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <stock_available>
+    <id><![CDATA[{{id_stock_mainty}}]]></id>
+    <id_product><![CDATA[{{id_product_P01}}]]></id_product>
+    <id_product_attribute><![CDATA[{{id_comb_mainty}}]]></id_product_attribute>
+    <quantity><![CDATA[5]]></quantity>
+    <depends_on_stock><![CDATA[0]]></depends_on_stock>
+    <out_of_stock><![CDATA[1]]></out_of_stock>
+  </stock_available>
+</prestashop>
+
+###
+
+#### 6.5 - Stock C_03 → 10
+PATCH {{webservice_url}}/api/stock_availables/{{id_stock_c03}}
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <stock_available>
+    <id><![CDATA[{{id_stock_c03}}]]></id>
+    <id_product><![CDATA[{{id_product_C03}}]]></id_product>
+    <id_product_attribute><![CDATA[0]]></id_product_attribute>
+    <quantity><![CDATA[10]]></quantity>
+    <depends_on_stock><![CDATA[0]]></depends_on_stock>
+    <out_of_stock><![CDATA[1]]></out_of_stock>
+  </stock_available>
+</prestashop>
+
+###
+
+#### 6.6 - Stock M_02 → 11
+PATCH {{webservice_url}}/api/stock_availables/{{id_stock_m02}}
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <stock_available>
+    <id><![CDATA[{{id_stock_m02}}]]></id>
+    <id_product><![CDATA[{{id_product_M02}}]]></id_product>
+    <id_product_attribute><![CDATA[0]]></id_product_attribute>
+    <quantity><![CDATA[11]]></quantity>
+    <depends_on_stock><![CDATA[0]]></depends_on_stock>
+    <out_of_stock><![CDATA[1]]></out_of_stock>
+  </stock_available>
+</prestashop>
+
+###
+
+
+
+
+# =============================================================================
+# RECAP DES IDS
+# =============================================================================
+# Options         : taille = 5 | couleur = 6
+# Valeurs         : ngoza = 26 | kely = 27 | fotsy = 28 | mainty = 29
+# Combinations    : T_01-ngoza = 40 | T_01-kely = 41 | P_01-fotsy = 42 | P_01-mainty = 43
+# Stocks          : ngoza = 63 | kely = 64 | fotsy = 65 | mainty = 66 | C_03 = 61 | M_02 = 62
+# =============================================================================

@@ -1,0 +1,597 @@
+# =============================================================================
+# CONFIGURATION
+# =============================================================================
+
+@webservice_url = http://localhost:70/prestashop
+@webservice_basic_auth = SFRXV1pBUUdTOTFMUUsyTkE2N0RCUzRMWjVFR1JORks6
+
+
+
+
+# =============================================================================
+# DONNEES DE REFERENCE
+# =============================================================================
+# Produits à créer :
+# date_dispo  | nom      | référence | prix_TTC | TVA    | catégorie   | prix_achat
+# 01/12/2025  | Tshirt   | T_01      | 12,50 €  | 11,65% | Akanjo      | 8,50 €
+# 02/05/2026  | Pantalon | P_01      | 18,99 €  | 11,65% | Akanjo      | 14,33 €
+# 08/05/2026  | Casquette| C_03      | 5,00 €   | 5,60%  | Accessoire  | 2,00 €
+# 08/05/2026  | Montre   | M_02      | 56,00 €  | 5,60%  | Accessoire  | 40,00 €
+#
+# Calcul prix HT depuis prix TTC :
+#   T_01  : 12,50 / 1,1165 = 11,20 HT  | wholesale_price HT : 8,50 / 1,1165 = 7,61
+#   P_01  : 18,99 / 1,1165 = 17,01 HT  | wholesale_price HT : 14,33 / 1,1165 = 12,83
+#   C_03  : 5,00 / 1,056   = 4,73 HT   | wholesale_price HT : 2,00 / 1,056  = 1,89
+#   M_02  : 56,00 / 1,056  = 53,03 HT  | wholesale_price HT : 40,00 / 1,056 = 37,88
+# =============================================================================
+
+
+
+
+# =============================================================================
+# ETAPE 1 - CREATION DES TAXES
+# =============================================================================
+# Deux taux de TVA utilisés :
+#   - TRG1 : 11,65% → pour les vêtements (Akanjo)
+#   - TRG2 : 5,60%  → pour les accessoires
+
+#### 1.1 - Taxe 11,65% (vêtements)
+POST {{webservice_url}}/api/taxes
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <tax>
+    <rate><![CDATA[11.650]]></rate>
+    <active><![CDATA[1]]></active>
+    <name>
+      <language id="1"><![CDATA[TVA FR 11.65%]]></language>
+    </name>
+  </tax>
+</prestashop>
+### => id_tax_1 = 33
+
+@id_tax_1 = 33
+
+###
+
+#### 1.2 - Taxe 5,60% (accessoires)
+POST {{webservice_url}}/api/taxes
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <tax>
+    <rate><![CDATA[5.600]]></rate>
+    <active><![CDATA[1]]></active>
+    <name>
+      <language id="1"><![CDATA[TVA FR 5.6%]]></language>
+    </name>
+  </tax>
+</prestashop>
+### => id_tax_2 = 34
+
+@id_tax_2 = 34
+
+###
+
+
+
+
+# =============================================================================
+# ETAPE 2 - CREATION DES GROUPES DE REGLES DE TAXES (Tax Rule Groups)
+# =============================================================================
+# Un Tax Rule Group regroupe les règles de taxe par pays.
+# Il est ensuite associé à un produit via id_tax_rules_group.
+
+#### 2.1 - Tax Rule Group pour TVA 11,65% (TRG1)
+POST {{webservice_url}}/api/tax_rule_groups
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <tax_rule_group>
+    <name><![CDATA[TRG1]]></name>
+    <active><![CDATA[1]]></active>
+  </tax_rule_group>
+</prestashop>
+### => id_trg_1 = 7
+
+@id_trg_1 = 7
+
+###
+
+#### 2.2 - Tax Rule Group pour TVA 5,60% (TRG2)
+POST {{webservice_url}}/api/tax_rule_groups
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <tax_rule_group>
+    <name><![CDATA[TRG2]]></name>
+    <active><![CDATA[1]]></active>
+  </tax_rule_group>
+</prestashop>
+### => id_trg_2 = 8
+
+@id_trg_2 = 8
+
+###
+
+
+
+
+# =============================================================================
+# ETAPE 3 - CREATION DES REGLES DE TAXES (Tax Rules)
+# =============================================================================
+# Une Tax Rule lie un Tax Rule Group à une taxe pour un pays donné.
+# id_country = 8 = France
+
+#### 3.1 - Règle TVA 11,65% → France (pour TRG1)
+POST {{webservice_url}}/api/tax_rules
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <tax_rule>
+    <id_tax_rules_group><![CDATA[{{id_trg_1}}]]></id_tax_rules_group>
+    <id_tax><![CDATA[{{id_tax_1}}]]></id_tax>
+    <id_country><![CDATA[8]]></id_country>
+  </tax_rule>
+</prestashop>
+### => 146
+
+###
+
+#### 3.2 - Règle TVA 5,60% → France (pour TRG2)
+POST {{webservice_url}}/api/tax_rules
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <tax_rule>
+    <id_tax_rules_group><![CDATA[{{id_trg_2}}]]></id_tax_rules_group>
+    <id_tax><![CDATA[{{id_tax_2}}]]></id_tax>
+    <id_country><![CDATA[8]]></id_country>
+  </tax_rule>
+</prestashop>
+### => 148
+
+###
+
+
+
+
+# =============================================================================
+# ETAPE 4 - CREATION DES CATEGORIES
+# =============================================================================
+# id_parent = 2 = Accueil (racine du catalogue)
+
+#### 4.1 - Catégorie Akanjo (vêtements)
+PATCH {{webservice_url}}/api/categories
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <category>
+    <id><![CDATA[10]]></id>
+    <active><![CDATA[1]]></active>
+    <id_parent><![CDATA[2]]></id_parent>
+    <name>
+      <language id="1"><![CDATA[Akanjo]]></language>
+    </name>
+    <link_rewrite>
+      <language id="1"><![CDATA[akanjo]]></language>
+    </link_rewrite>
+    <description>
+      <language id="1"><![CDATA[akanjo]]></language>
+    </description>
+  </category>
+</prestashop>
+### => id_category_akanjo = 10
+
+@id_category_akanjo = 10
+
+###
+
+#### 4.2 - Catégorie Accessoire
+PUT {{webservice_url}}/api/categories
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <category>
+    <active><![CDATA[1]]></active>
+    <id_parent><![CDATA[2]]></id_parent>
+    <name>
+      <language id="1"><![CDATA[Accessoire]]></language>
+    </name>
+    <link_rewrite>
+      <language id="1"><![CDATA[accessoire]]></language>
+    </link_rewrite>
+    <description>
+      <language id="1"><![CDATA[accessoire]]></language>
+    </description>
+  </category>
+</prestashop>
+### => id_category_accessoire = 11
+
+@id_category_accessoire = 11
+
+###
+
+
+
+
+# =============================================================================
+# ETAPE 5 - CREATION DES PRODUITS
+# =============================================================================
+# Notes :
+#   - price = prix HT (PrestaShop stocke toujours le HT)
+#   - wholesale_price = prix d'achat HT (mis à jour en étape 6)
+#   - id_tax_rules_group lie le produit à son groupe de taxe
+#   - product_type = "combinations" pour T_01 (déclinaisons de taille)
+#   - product_type = "standard" pour les autres
+
+#### 5.1 - Produit T_01 : Tshirt (avec déclinaisons)
+POST {{webservice_url}}/api/products
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <product>
+    <id_category_default><![CDATA[{{id_category_akanjo}}]]></id_category_default>
+    <id_tax_rules_group><![CDATA[{{id_trg_1}}]]></id_tax_rules_group>
+    <id_shop_default><![CDATA[1]]></id_shop_default>
+    <reference><![CDATA[T_01]]></reference>
+    <price><![CDATA[11.20]]></price>
+    <active><![CDATA[1]]></active>
+    <available_for_order><![CDATA[1]]></available_for_order>
+    <show_price><![CDATA[1]]></show_price>
+    <state><![CDATA[1]]></state>
+    <minimal_quantity><![CDATA[1]]></minimal_quantity>
+    <product_type><![CDATA[combinations]]></product_type>
+    <ecotax><![CDATA[0]]></ecotax>
+    <on_sale><![CDATA[0]]></on_sale>
+    <online_only><![CDATA[0]]></online_only>
+    <cache_is_pack><![CDATA[0]]></cache_is_pack>
+    <name>
+      <language id="1"><![CDATA[Tshirt]]></language>
+    </name>
+    <description>
+      <language id="1"><![CDATA[Tshirt]]></language>
+    </description>
+    <description_short>
+      <language id="1"><![CDATA[Tshirt]]></language>
+    </description_short>
+    <link_rewrite>
+      <language id="1"><![CDATA[tshirt]]></language>
+    </link_rewrite>
+    <meta_description>
+      <language id="1"><![CDATA[]]></language>
+    </meta_description>
+    <associations>
+      <categories>
+        <category><id><![CDATA[{{id_category_akanjo}}]]></id></category>
+      </categories>
+    </associations>
+  </product>
+</prestashop>
+### => id_product_T01 = 20
+
+@id_product_T01 = 20
+
+###
+
+#### 5.2 - Produit P_01 : Pantalon
+POST {{webservice_url}}/api/products
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <product>
+    <id_category_default><![CDATA[{{id_category_akanjo}}]]></id_category_default>
+    <id_tax_rules_group><![CDATA[{{id_trg_1}}]]></id_tax_rules_group>
+    <id_shop_default><![CDATA[1]]></id_shop_default>
+    <reference><![CDATA[P_01]]></reference>
+    <price><![CDATA[17.01]]></price>
+    <active><![CDATA[1]]></active>
+    <available_for_order><![CDATA[1]]></available_for_order>
+    <show_price><![CDATA[1]]></show_price>
+    <state><![CDATA[1]]></state>
+    <minimal_quantity><![CDATA[1]]></minimal_quantity>
+    <product_type><![CDATA[standard]]></product_type>
+    <ecotax><![CDATA[0]]></ecotax>
+    <on_sale><![CDATA[0]]></on_sale>
+    <online_only><![CDATA[0]]></online_only>
+    <cache_is_pack><![CDATA[0]]></cache_is_pack>
+    <name>
+      <language id="1"><![CDATA[Pantalon]]></language>
+    </name>
+    <description>
+      <language id="1"><![CDATA[Pantalon]]></language>
+    </description>
+    <description_short>
+      <language id="1"><![CDATA[Pantalon]]></language>
+    </description_short>
+    <link_rewrite>
+      <language id="1"><![CDATA[pantalon]]></language>
+    </link_rewrite>
+    <meta_description>
+      <language id="1"><![CDATA[]]></language>
+    </meta_description>
+    <associations>
+      <categories>
+        <category><id><![CDATA[{{id_category_akanjo}}]]></id></category>
+      </categories>
+    </associations>
+  </product>
+</prestashop>
+### => id_product_P01 = 21
+
+@id_product_P01 = 21
+
+###
+
+#### 5.3 - Produit C_03 : Casquette
+POST {{webservice_url}}/api/products
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <product>
+    <id_category_default><![CDATA[{{id_category_accessoire}}]]></id_category_default>
+    <id_tax_rules_group><![CDATA[{{id_trg_2}}]]></id_tax_rules_group>
+    <id_shop_default><![CDATA[1]]></id_shop_default>
+    <reference><![CDATA[C_03]]></reference>
+    <price><![CDATA[4.73]]></price>
+    <active><![CDATA[1]]></active>
+    <available_for_order><![CDATA[1]]></available_for_order>
+    <show_price><![CDATA[1]]></show_price>
+    <state><![CDATA[1]]></state>
+    <minimal_quantity><![CDATA[1]]></minimal_quantity>
+    <product_type><![CDATA[standard]]></product_type>
+    <ecotax><![CDATA[0]]></ecotax>
+    <on_sale><![CDATA[0]]></on_sale>
+    <online_only><![CDATA[0]]></online_only>
+    <cache_is_pack><![CDATA[0]]></cache_is_pack>
+    <name>
+      <language id="1"><![CDATA[Casquette]]></language>
+    </name>
+    <description>
+      <language id="1"><![CDATA[Casquette]]></language>
+    </description>
+    <description_short>
+      <language id="1"><![CDATA[Casquette]]></language>
+    </description_short>
+    <link_rewrite>
+      <language id="1"><![CDATA[casquette]]></language>
+    </link_rewrite>
+    <meta_description>
+      <language id="1"><![CDATA[]]></language>
+    </meta_description>
+    <associations>
+      <categories>
+        <category><id><![CDATA[{{id_category_accessoire}}]]></id></category>
+      </categories>
+    </associations>
+  </product>
+</prestashop>
+### => id_product_C03 = 22
+
+@id_product_C03 = 22
+
+###
+
+#### 5.4 - Produit M_02 : Montre
+POST {{webservice_url}}/api/products
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <product>
+    <id_category_default><![CDATA[{{id_category_accessoire}}]]></id_category_default>
+    <id_tax_rules_group><![CDATA[{{id_trg_2}}]]></id_tax_rules_group>
+    <id_shop_default><![CDATA[1]]></id_shop_default>
+    <reference><![CDATA[M_02]]></reference>
+    <price><![CDATA[53.03]]></price>
+    <active><![CDATA[1]]></active>
+    <available_for_order><![CDATA[1]]></available_for_order>
+    <show_price><![CDATA[1]]></show_price>
+    <state><![CDATA[1]]></state>
+    <minimal_quantity><![CDATA[1]]></minimal_quantity>
+    <product_type><![CDATA[standard]]></product_type>
+    <ecotax><![CDATA[0]]></ecotax>
+    <on_sale><![CDATA[0]]></on_sale>
+    <online_only><![CDATA[0]]></online_only>
+    <cache_is_pack><![CDATA[0]]></cache_is_pack>
+    <name>
+      <language id="1"><![CDATA[Montre]]></language>
+    </name>
+    <description>
+      <language id="1"><![CDATA[Montre]]></language>
+    </description>
+    <description_short>
+      <language id="1"><![CDATA[Montre]]></language>
+    </description_short>
+    <link_rewrite>
+      <language id="1"><![CDATA[montre]]></language>
+    </link_rewrite>
+    <meta_description>
+      <language id="1"><![CDATA[]]></language>
+    </meta_description>
+    <associations>
+      <categories>
+        <category><id><![CDATA[{{id_category_accessoire}}]]></id></category>
+      </categories>
+    </associations>
+  </product>
+</prestashop>
+### => id_product_M02 = 23
+
+@id_product_M02 = 23
+
+###
+
+
+
+
+# =============================================================================
+# ETAPE 6 - MISE A JOUR DATE DE DISPONIBILITE ET PRIX D'ACHAT
+# =============================================================================
+# PATCH permet de ne mettre à jour que les champs spécifiés.
+# wholesale_price = prix d'achat HT (utilisé pour calculer la marge).
+# available_date  = date à partir de laquelle le produit est disponible.
+
+#### 6.1 - T_01 : dispo 01/12/2025, achat 7,61€ HT
+PATCH {{webservice_url}}/api/products/{{id_product_T01}}
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <product>
+    <id><![CDATA[{{id_product_T01}}]]></id>
+    <available_date><![CDATA[2025-12-01]]></available_date>
+    <wholesale_price><![CDATA[7.61]]></wholesale_price>
+  </product>
+</prestashop>
+
+###
+
+#### 6.2 - P_01 : dispo 02/05/2026, achat 12,83€ HT
+PATCH {{webservice_url}}/api/products/{{id_product_P01}}
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <product>
+    <id><![CDATA[{{id_product_P01}}]]></id>
+    <available_date><![CDATA[2026-05-02]]></available_date>
+    <wholesale_price><![CDATA[12.83]]></wholesale_price>
+  </product>
+</prestashop>
+
+###
+
+#### 6.3 - C_03 : dispo 08/05/2026, achat 1,89€ HT
+PATCH {{webservice_url}}/api/products/{{id_product_C03}}
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <product>
+    <id><![CDATA[{{id_product_C03}}]]></id>
+    <available_date><![CDATA[2026-05-08]]></available_date>
+    <wholesale_price><![CDATA[1.89]]></wholesale_price>
+  </product>
+</prestashop>
+
+###
+
+#### 6.4 - M_02 : dispo 08/05/2026, achat 37,88€ HT
+PATCH {{webservice_url}}/api/products/{{id_product_M02}}
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <product>
+    <id><![CDATA[{{id_product_M02}}]]></id>
+    <available_date><![CDATA[2026-05-08]]></available_date>
+    <wholesale_price><![CDATA[37.88]]></wholesale_price>
+  </product>
+</prestashop>
+
+###
+
+
+
+
+# =============================================================================
+# ETAPE 7 - UPLOAD DES IMAGES PRODUITS
+# =============================================================================
+# Les images sont dans ../../images/ par rapport à ce fichier.
+# Format multipart/form-data requis pour l'upload d'images.
+
+#### 7.1 - Image T_01
+POST {{webservice_url}}/api/images/products/{{id_product_T01}}
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: multipart/form-data; boundary=WebKitFormBoundary7MA4YWxkTrZu0gW
+
+--WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="image"; filename="T_01.png"
+Content-Type: image/png
+
+< ../../images/T_01.png
+--WebKitFormBoundary7MA4YWxkTrZu0gW--
+
+###
+
+#### 7.2 - Image P_01
+POST {{webservice_url}}/api/images/products/{{id_product_P01}}
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: multipart/form-data; boundary=WebKitFormBoundary7MA4YWxkTrZu0gW
+
+--WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="image"; filename="P_01.png"
+Content-Type: image/png
+
+< ../../images/P_01.png
+--WebKitFormBoundary7MA4YWxkTrZu0gW--
+
+###
+
+#### 7.3 - Image C_03
+POST {{webservice_url}}/api/images/products/{{id_product_C03}}
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: multipart/form-data; boundary=WebKitFormBoundary7MA4YWxkTrZu0gW
+
+--WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="image"; filename="C_03.png"
+Content-Type: image/png
+
+< ../../images/C_03.png
+--WebKitFormBoundary7MA4YWxkTrZu0gW--
+
+###
+
+#### 7.4 - Image M_02
+POST {{webservice_url}}/api/images/products/{{id_product_M02}}
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: multipart/form-data; boundary=WebKitFormBoundary7MA4YWxkTrZu0gW
+
+--WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="image"; filename="M_02.jpeg"
+Content-Type: image/jpeg
+
+< ../../images/M_02.jpeg
+--WebKitFormBoundary7MA4YWxkTrZu0gW--
+
+###
+
+
+
+
+# =============================================================================
+# RECAP DES IDS
+# =============================================================================
+# Taxes         : TVA 11,65% = 33 | TVA 5,60% = 34
+# Tax Grp       : TRG1 (11,65%) = 7 | TRG2 (5,60%) = 8
+# Catégories    : Akanjo = 10 | Accessoire = 11
+# Produits      : T_01 = 20 | P_01 = 21 | C_03 = 22 | M_02 = 23
+# =============================================================================

@@ -1,0 +1,355 @@
+# REST Client equivalent of demo_product_az.json
+# The PrestaShop webservice uses Basic Auth.
+# Set webservice_basic_auth to base64("YOUR_WEBSERVICE_KEY:") before running the requests.
+# In REST Client, the header becomes: Authorization: Basic {{webservice_basic_auth}}
+
+@webservice_url = http://localhost:70/prestashop
+@webservice_basic_auth = Qkc4RURGRTROQkU3QVdTNUVGQzEyNEY5VVBOUFdJVDI6
+@product_id = 23
+@product_combination_id = 1
+@id_stock_available = 63
+@id_feature = 1
+@id_feature_value = 1
+@id_product_option = 1
+@attribute_name = Color
+@value = Red
+@name = Material
+
+### 1 - Create manufacturer
+POST {{webservice_url}}/api/manufacturers
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+    <manufacturer>
+        <name>ACMEManufacturer</name>
+    </manufacturer>
+</prestashop>
+
+### 2 - Create supplier
+POST {{webservice_url}}/api/suppliers
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+    <supplier>
+        <name>ACMESupplier</name>
+    </supplier>
+</prestashop>
+
+### 3 - Create category
+POST {{webservice_url}}/api/categories
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+<category>
+    <name>
+        <language id="1"><![CDATA[Category demo]]></language>
+    </name>
+    <link_rewrite>
+        <language id="1"><![CDATA[category-demo]]></language>
+    </link_rewrite>
+    <description>
+        <language id="1"><![CDATA[my awesome category description]]></language>
+    </description>
+    <active>1</active>
+    <id_parent>1</id_parent>
+</category>
+</prestashop>
+
+### 4 - Create product
+POST {{webservice_url}}/api/products
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+<product>
+	<id_manufacturer><![CDATA[4]]></id_manufacturer>
+	<id_supplier><![CDATA[1]]></id_supplier>
+    <id_brand><![CDATA[10]]></id_brand>
+	<id_category_default><![CDATA[17]]></id_category_default>
+	<new><![CDATA[1]]></new>
+	<id_default_combination><![CDATA[1]]></id_default_combination>
+	<id_tax_rules_group><![CDATA[1]]></id_tax_rules_group>
+	<type><![CDATA[1]]></type>
+	<id_shop_default><![CDATA[1]]></id_shop_default>
+	<reference><![CDATA[123456]]></reference>
+	<supplier_reference><![CDATA[ABCDEF]]></supplier_reference>
+	<ean13><![CDATA[1231231231231]]></ean13>
+	<state><![CDATA[1]]></state>
+	<product_type><![CDATA[standard]]></product_type>
+	<price><![CDATA[123.45]]></price>
+	<unit_price><![CDATA[123.45]]></unit_price>
+	<active><![CDATA[1]]></active>
+	<meta_description><language id="1"><![CDATA[Description]]></language><language id="2"><![CDATA[Description]]></language></meta_description>
+	<meta_keywords><language id="1"><![CDATA[]]></language><language id="2"><![CDATA[]]></language></meta_keywords>
+	<meta_title><language id="1"><![CDATA[]]></language><language id="2"><![CDATA[]]></language></meta_title>
+	<link_rewrite><language id="1"><![CDATA[]]></language><language id="2"><![CDATA[]]></language></link_rewrite>
+	<name><language id="1"><![CDATA[Product Name]]></language><language id="2"><![CDATA[Product Name]]></language></name>
+	<description><language id="1"><![CDATA[Description]]></language><language id="2"><![CDATA[Description]]></language></description>
+	<description_short><language id="1"><![CDATA[]]></language><language id="2"><![CDATA[]]></language></description_short>
+    <associations>
+        <categories>
+            <category>
+                <id><![CDATA[1]]></id>
+            </category>
+        </categories>
+    </associations>
+</product>
+</prestashop>
+
+### 5 - Get stock available
+GET {{webservice_url}}/api/stock_availables?filter[id_product]={{product_id}}&display=full&output_format=JSON
+Authorization: Basic {{webservice_basic_auth}}
+Accept: application/json
+
+### 5 - Update stock available
+PATCH {{webservice_url}}/api/stock_availables/{{id_stock_available}}
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+    <stock_available>
+        <id><![CDATA[{{id_stock_available}}]]></id>
+        <quantity><![CDATA[10]]></quantity>
+    </stock_available>
+</prestashop>
+
+### 5 - Update stock available - complete
+PUT {{webservice_url}}/api/stock_availables/{{id_stock_available}}
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+    <stock_available>
+        <id><![CDATA[{{id_stock_available}}]]></id>
+        <quantity><![CDATA[100]]></quantity>
+        <id_product><![CDATA[{{product_id}}]]></id_product>
+        <id_product_attribute><![CDATA[0]]></id_product_attribute>
+        <depends_on_stock>0</depends_on_stock>
+        <out_of_stock>0</out_of_stock>
+        <id_shop>1</id_shop>
+    </stock_available>
+</prestashop>
+
+### 6 - Upload image
+POST {{webservice_url}}/api/images/products/{{product_id}}
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: multipart/form-data; boundary=WebKitFormBoundary7MA4YWxkTrZu0gW
+
+--WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="image"; filename="image.jpg"
+Content-Type: image/jpeg
+
+< ./path/to/image.jpg
+--WebKitFormBoundary7MA4YWxkTrZu0gW--
+
+### 7 - Update multi-lang fields
+PATCH {{webservice_url}}/api/products/{{product_id}}
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+<product>
+<id><![CDATA[{{product_id}}]]></id>
+<meta_description>
+        <language id="1"><![CDATA[Meta English description]]></language>
+        <language id="2"><![CDATA[Description meta en français]]></language>
+    </meta_description>
+<meta_keywords>
+        <language id="1"><![CDATA[EN keyworkds]]></language>
+        <language id="2"><![CDATA[Mots clés FR]]></language>
+    </meta_keywords>
+<meta_title>    
+        <language id="1"><![CDATA[English Title]]></language>
+        <language id="2"><![CDATA[Titre en Francais]]></language>
+    </meta_title>
+<link_rewrite>
+        <language id="1"><![CDATA[english-title]]></language>
+        <language id="2"><![CDATA[titre-francais]]></language>
+    </link_rewrite>
+<name>
+        <language id="1"><![CDATA[Product name]]></language>
+        <language id="2"><![CDATA[Nom du produit]]></language>
+    </name>
+<description>
+        <language id="1"><![CDATA[English Description]]></language>
+        <language id="2"><![CDATA[Description en français]]></language>
+    </description>
+<description_short>
+        <language id="1"><![CDATA[Short English description]]></language>
+        <language id="2"><![CDATA[Description courte en français]]></language>
+    </description_short>
+</product>
+</prestashop>
+
+### 8 - Create Combination Product
+POST {{webservice_url}}/api/products
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+    <product>
+        <id_manufacturer><![CDATA[1]]></id_manufacturer>
+        <id_supplier><![CDATA[1]]></id_supplier>
+        <id_category_default><![CDATA[1]]></id_category_default>
+        <new><![CDATA[1]]></new>
+        <id_default_combination><![CDATA[1]]></id_default_combination>
+        <id_tax_rules_group><![CDATA[1]]></id_tax_rules_group>
+        <type><![CDATA[1]]></type>
+        <id_shop_default><![CDATA[1]]></id_shop_default>
+        <reference><![CDATA[123456]]></reference>
+        <supplier_reference><![CDATA[ABCDEF]]></supplier_reference>
+        <ean13><![CDATA[1231231231231]]></ean13>
+        <state><![CDATA[1]]></state>
+        <product_type><![CDATA[combinations]]></product_type>
+        <price><![CDATA[123.45]]></price>
+        <unit_price><![CDATA[123.45]]></unit_price>
+        <active><![CDATA[1]]></active>
+        <meta_description>
+            <language id="1"><![CDATA[Description]]></language>
+        </meta_description>
+        <meta_keywords>
+            <language id="1"><![CDATA[Keywords]]></language>
+        </meta_keywords>
+        <meta_title>
+            <language id="1"><![CDATA[My Title for SEO]]></language>
+        </meta_title>
+        <link_rewrite>
+            <language id="1"><![CDATA[awesome-product]]></language>
+        </link_rewrite>
+        <name>
+            <language id="1"><![CDATA[My awesome Product with combinations]]></language>
+        </name>
+        <description>
+            <language id="1"><![CDATA[Description]]></language>
+        </description>
+        <description_short>
+            <language id="1"><![CDATA[Short description]]></language>
+        </description_short>
+        <associations>
+            <categories>
+                <category>
+                    <id><![CDATA[1]]></id>
+                </category>
+            </categories>
+        </associations>
+    </product>
+</prestashop>
+
+### 9 - Create Product options
+POST {{webservice_url}}/api/product_options
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+    <product_option>
+        <is_color_group><![CDATA[0]]></is_color_group>
+        <group_type><![CDATA[select]]></group_type>
+        <name>
+            <language id="1"><![CDATA[{{attribute_name}}]]></language>
+        </name>
+        <public_name>
+            <language id="1"><![CDATA[{{attribute_name}}]]></language>
+        </public_name>
+    </product_option>
+</prestashop>
+
+### 10 - Create Product option values
+POST {{webservice_url}}/api/product_option_values
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+    <product_option_value>
+        <id_attribute_group><![CDATA[{{id_product_option}}]]></id_attribute_group>
+        <name>
+            <language id="1"><![CDATA[{{value}}]]></language>
+        </name>
+    </product_option_value>
+</prestashop>
+
+### 11 - Create Combinations
+POST {{webservice_url}}/api/combinations
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+    <combination>
+        <id_product><![CDATA[{{product_combination_id}}]]></id_product>
+        <ean13><![CDATA[1234567890123]]></ean13>
+        <mpn><![CDATA[123456]]></mpn>
+        <reference><![CDATA[demo_1]]></reference>
+        <supplier_reference><![CDATA[mfr_1]]></supplier_reference>
+        <price><![CDATA[10.000000]]></price>
+        <minimal_quantity><![CDATA[0]]></minimal_quantity>
+        <associations>
+            <product_option_values nodeType="product_option_value" api="product_option_values">
+                <product_option_value>
+                    <id><![CDATA[17]]></id>
+                </product_option_value>
+            </product_option_values>
+        </associations>
+    </combination>
+</prestashop>
+
+### 12 - Create Feature
+POST {{webservice_url}}/api/product_features
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+    <product_feature>
+        <name>
+            <language id="1"><![CDATA[{{name}}]]></language>
+        </name>
+    </product_feature>
+</prestashop>
+
+### 13 - Create Feature value
+POST {{webservice_url}}/api/product_feature_values
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+    <product_feature_value>
+        <id_feature><![CDATA[{{id_feature}}]]></id_feature>
+        <value>
+            <language id="1"><![CDATA[{{value}}]]></language>
+        </value>
+    </product_feature_value>
+</prestashop>
+
+### 14 - Associate Feature to Product
+PATCH {{webservice_url}}/api/products/{{product_id}}
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+    <product>
+        <id><![CDATA[{{product_id}}]]></id>
+	    <associations>
+            <product_features>
+                <product_feature>
+                    <id><![CDATA[{{id_feature}}]]></id>
+                    <id_feature_value><![CDATA[{{id_feature_value}}]]></id_feature_value>
+                </product_feature>
+            </product_features>
+        </associations>
+    </product>
+</prestashop>

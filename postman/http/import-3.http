@@ -1,0 +1,609 @@
+# =============================================================================
+# CONFIGURATION
+# =============================================================================
+
+@webservice_url = http://localhost:70/prestashop
+@webservice_basic_auth = SFRXV1pBUUdTOTFMUUsyTkE2N0RCUzRMWjVFR1JORms6
+
+
+
+
+# =============================================================================
+# SCENARIO - CREATION DE 3 COMMANDES
+# =============================================================================
+# date        | client | adresse         | articles              | état
+# 09/05/2026  | Rakoto | Andoharanofotsy | T_01 ngoza x3         | En attente paiement à la livraison (state=13)
+# 16/04/2026  | Rajao  | Analakely       | T_01 kely x2 + C_03x1 | Paiement accepté (state=2)
+# 07/05/2026  | Rakoto | Andoharanofotsy | T_01 kely x1          | Erreur de paiement (state=8)
+#
+# Calcul des montants :
+#   T_01 ngoza : 11,20 HT × 3 = 33,60 HT → 12,50 TTC × 3 = 37,50 TTC
+#   T_01 kely  : 13,43 HT     → 14,99 TTC  (prix_base 11,20 + supplément 2,23)
+#   C_03       : 4,73 HT      → 5,00 TTC
+#
+# Mapping module ↔ état (IMPORTANT - incohérence = erreur de paiement) :
+#   ps_cashondelivery → state 13 "En attente de paiement à la livraison"
+#   ps_checkpayment   → state 1  "En attente du paiement par chèque"
+#   (vide)            → state 2  "Paiement accepté"
+#   (vide)            → state 8  "Erreur de paiement"
+# =============================================================================
+
+
+
+
+# =============================================================================
+# ETAPE 1 - CREATION DES CLIENTS
+# =============================================================================
+# id_default_group = 3 = groupe "Client" standard.
+
+#### 1.1 - Client Rakoto
+POST {{webservice_url}}/api/customers
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <customer>
+    <passwd><![CDATA[XvzsX5O0!GBD0uXQ]]></passwd>
+    <lastname><![CDATA[Rakoto]]></lastname>
+    <firstname><![CDATA[Rakoto]]></firstname>
+    <email><![CDATA[rakoto@yopmail.com]]></email>
+    <active><![CDATA[1]]></active>
+    <newsletter><![CDATA[0]]></newsletter>
+    <id_default_group><![CDATA[3]]></id_default_group>
+  </customer>
+</prestashop>
+### => id_customer_rakoto = 3
+
+@id_customer_rakoto = 3
+
+###
+
+#### 1.2 - Client Rajao
+POST {{webservice_url}}/api/customers
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <customer>
+    <passwd><![CDATA[BAC?UoxjQIW;Na8ix]]></passwd>
+    <lastname><![CDATA[Rajao]]></lastname>
+    <firstname><![CDATA[Rajao]]></firstname>
+    <email><![CDATA[rajao1970@yopmail.com]]></email>
+    <active><![CDATA[1]]></active>
+    <newsletter><![CDATA[0]]></newsletter>
+    <id_default_group><![CDATA[3]]></id_default_group>
+  </customer>
+</prestashop>
+### => id_customer_rajao = 4
+
+@id_customer_rajao = 4
+
+###
+
+
+
+
+# =============================================================================
+# ETAPE 2 - CREATION DES ADRESSES
+# =============================================================================
+# id_country = 8 = France (pays par défaut de la boutique).
+# postcode requis par PrestaShop même pour Madagascar.
+
+#### 2.1 - Adresse Rakoto - Andoharanofotsy
+POST {{webservice_url}}/api/addresses
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <address>
+    <id_customer><![CDATA[{{id_customer_rakoto}}]]></id_customer>
+    <id_country><![CDATA[8]]></id_country>
+    <alias><![CDATA[domicile]]></alias>
+    <lastname><![CDATA[Rakoto]]></lastname>
+    <firstname><![CDATA[Rakoto]]></firstname>
+    <address1><![CDATA[Andoharanofotsy]]></address1>
+    <city><![CDATA[Antananarivo]]></city>
+    <postcode><![CDATA[75000]]></postcode>
+  </address>
+</prestashop>
+### => id_address_rakoto = 7
+
+@id_address_rakoto = 7
+
+###
+
+#### 2.2 - Adresse Rajao - Analakely
+POST {{webservice_url}}/api/addresses
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <address>
+    <id_customer><![CDATA[{{id_customer_rajao}}]]></id_customer>
+    <id_country><![CDATA[8]]></id_country>
+    <alias><![CDATA[domicile]]></alias>
+    <lastname><![CDATA[Rajao]]></lastname>
+    <firstname><![CDATA[Rajao]]></firstname>
+    <address1><![CDATA[Analakely]]></address1>
+    <city><![CDATA[Antananarivo]]></city>
+    <postcode><![CDATA[75000]]></postcode>
+  </address>
+</prestashop>
+### => id_address_rajao = 8
+
+@id_address_rajao = 8
+
+###
+
+
+
+
+# =============================================================================
+# ETAPE 3 - RECUPERATION DES IDS PRODUITS ET COMBINATIONS
+# =============================================================================
+
+#### 3.1 - Id produit T_01
+GET {{webservice_url}}/api/products?filter[reference]=[T_01]&display=[id]
+Authorization: Basic {{webservice_basic_auth}}
+### => id_product_T01 = 20
+
+@id_product_T01 = 20
+
+###
+
+#### 3.2 - Id produit C_03
+GET {{webservice_url}}/api/products?filter[reference]=[C_03]&display=[id]
+Authorization: Basic {{webservice_basic_auth}}
+### => id_product_C03 = 22
+
+@id_product_C03 = 22
+
+###
+
+#### 3.3 - Id combination T_01-ngoza
+GET {{webservice_url}}/api/combinations?filter[reference]=[T_01-ngoza]&display=[id]
+Authorization: Basic {{webservice_basic_auth}}
+### => id_comb_ngoza = 40
+
+@id_comb_ngoza = 40
+
+###
+
+#### 3.4 - Id combination T_01-kely
+GET {{webservice_url}}/api/combinations?filter[reference]=[T_01-kely]&display=[id]
+Authorization: Basic {{webservice_basic_auth}}
+### => id_comb_kely = 41
+
+@id_comb_kely = 41
+
+###
+
+
+
+
+# =============================================================================
+# COMMANDE 1 - Rakoto | T_01 ngoza x3 | En attente paiement à la livraison
+# =============================================================================
+# module        : ps_cashondelivery → state 13 obligatoire (sinon erreur de paiement)
+# payment       : libellé affiché dans le back-office
+# delivery_option : {"id_address":"id_carrier,"} — requis pour que PrestaShop
+#                   valide le transporteur et évite l'erreur de paiement
+# total_paid_real = 0 car pas encore encaissé
+# valid         = 0 car commande non validée
+
+#### 4.1 - Panier commande 1
+POST {{webservice_url}}/api/carts
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <cart>
+    <id_address_delivery><![CDATA[{{id_address_rakoto}}]]></id_address_delivery>
+    <id_address_invoice><![CDATA[{{id_address_rakoto}}]]></id_address_invoice>
+    <id_currency><![CDATA[1]]></id_currency>
+    <id_customer><![CDATA[{{id_customer_rakoto}}]]></id_customer>
+    <id_lang><![CDATA[1]]></id_lang>
+    <id_shop><![CDATA[1]]></id_shop>
+    <id_shop_group><![CDATA[1]]></id_shop_group>
+    <id_carrier><![CDATA[1]]></id_carrier>
+    <delivery_option><![CDATA[{"{{id_address_rakoto}}":"1,"}]]></delivery_option>
+    <recyclable><![CDATA[0]]></recyclable>
+    <gift><![CDATA[0]]></gift>
+    <associations>
+      <cart_rows>
+        <cart_row>
+          <id_product><![CDATA[{{id_product_T01}}]]></id_product>
+          <id_product_attribute><![CDATA[{{id_comb_ngoza}}]]></id_product_attribute>
+          <id_address_delivery><![CDATA[{{id_address_rakoto}}]]></id_address_delivery>
+          <id_customization><![CDATA[0]]></id_customization>
+          <quantity><![CDATA[3]]></quantity>
+        </cart_row>
+      </cart_rows>
+    </associations>
+  </cart>
+</prestashop>
+### => id_cart_1 = 6
+
+@id_cart_1 = 6
+
+###
+
+#### 4.2 - Commande 1
+POST {{webservice_url}}/api/orders
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <order>
+    <id_address_delivery><![CDATA[{{id_address_rakoto}}]]></id_address_delivery>
+    <id_address_invoice><![CDATA[{{id_address_rakoto}}]]></id_address_invoice>
+    <id_cart><![CDATA[{{id_cart_1}}]]></id_cart>
+    <id_currency><![CDATA[1]]></id_currency>
+    <id_lang><![CDATA[1]]></id_lang>
+    <id_customer><![CDATA[{{id_customer_rakoto}}]]></id_customer>
+    <id_carrier><![CDATA[1]]></id_carrier>
+    <module><![CDATA[ps_cashondelivery]]></module>
+    <payment><![CDATA[Paiement comptant à la livraison (Cash on delivery)]]></payment>
+    <date_add><![CDATA[2026-05-09 00:00:00]]></date_add>
+    <valid><![CDATA[0]]></valid>
+    <total_paid><![CDATA[37.50]]></total_paid>
+    <total_paid_tax_incl><![CDATA[37.50]]></total_paid_tax_incl>
+    <total_paid_tax_excl><![CDATA[33.60]]></total_paid_tax_excl>
+    <total_paid_real><![CDATA[0]]></total_paid_real>
+    <total_products><![CDATA[33.60]]></total_products>
+    <total_products_wt><![CDATA[37.50]]></total_products_wt>
+    <total_shipping><![CDATA[0]]></total_shipping>
+    <total_shipping_tax_incl><![CDATA[0]]></total_shipping_tax_incl>
+    <total_shipping_tax_excl><![CDATA[0]]></total_shipping_tax_excl>
+    <total_discounts><![CDATA[0]]></total_discounts>
+    <total_discounts_tax_incl><![CDATA[0]]></total_discounts_tax_incl>
+    <total_discounts_tax_excl><![CDATA[0]]></total_discounts_tax_excl>
+    <total_wrapping><![CDATA[0]]></total_wrapping>
+    <total_wrapping_tax_incl><![CDATA[0]]></total_wrapping_tax_incl>
+    <total_wrapping_tax_excl><![CDATA[0]]></total_wrapping_tax_excl>
+    <conversion_rate><![CDATA[1.000000]]></conversion_rate>
+    <round_mode><![CDATA[2]]></round_mode>
+    <round_type><![CDATA[1]]></round_type>
+    <associations>
+      <order_rows>
+        <order_row>
+          <product_id><![CDATA[{{id_product_T01}}]]></product_id>
+          <product_attribute_id><![CDATA[{{id_comb_ngoza}}]]></product_attribute_id>
+          <product_quantity><![CDATA[3]]></product_quantity>
+          <product_name><![CDATA[Tshirt (taille : ngoza)]]></product_name>
+          <product_reference><![CDATA[T_01-ngoza]]></product_reference>
+          <product_price><![CDATA[11.20]]></product_price>
+          <unit_price_tax_incl><![CDATA[12.50]]></unit_price_tax_incl>
+          <unit_price_tax_excl><![CDATA[11.20]]></unit_price_tax_excl>
+        </order_row>
+      </order_rows>
+    </associations>
+  </order>
+</prestashop>
+### => id_order_1 = 6
+
+@id_order_1 = 6
+
+###
+
+#### 4.3 - Historique commande 1 : En attente de paiement à la livraison (state=13)
+POST {{webservice_url}}/api/order_histories
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <order_history>
+    <id_order><![CDATA[{{id_order_1}}]]></id_order>
+    <id_order_state><![CDATA[13]]></id_order_state>
+    <id_employee><![CDATA[1]]></id_employee>
+  </order_history>
+</prestashop>
+
+###
+
+
+
+
+# =============================================================================
+# COMMANDE 2 - Rajao | T_01 kely x2 + C_03 x1 | Paiement accepté
+# =============================================================================
+# T_01 kely x2 : 14,99 TTC × 2 = 29,98 TTC → 13,43 HT × 2 = 26,86 HT
+# C_03 x1      : 5,00  TTC × 1 = 5,00  TTC → 4,73  HT × 1 = 4,73  HT
+# total TTC = 34,98 | total HT = 31,59
+# valid = 1 et total_paid_real = total_paid car paiement effectivement reçu
+# Un order_payment est enregistré en plus pour tracer le règlement
+
+#### 5.1 - Panier commande 2
+POST {{webservice_url}}/api/carts
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <cart>
+    <id_address_delivery><![CDATA[{{id_address_rajao}}]]></id_address_delivery>
+    <id_address_invoice><![CDATA[{{id_address_rajao}}]]></id_address_invoice>
+    <id_currency><![CDATA[1]]></id_currency>
+    <id_customer><![CDATA[{{id_customer_rajao}}]]></id_customer>
+    <id_lang><![CDATA[1]]></id_lang>
+    <id_shop><![CDATA[1]]></id_shop>
+    <id_shop_group><![CDATA[1]]></id_shop_group>
+    <id_carrier><![CDATA[1]]></id_carrier>
+    <delivery_option><![CDATA[{"{{id_address_rajao}}":"1,"}]]></delivery_option>
+    <recyclable><![CDATA[0]]></recyclable>
+    <gift><![CDATA[0]]></gift>
+    <associations>
+      <cart_rows>
+        <cart_row>
+          <id_product><![CDATA[{{id_product_T01}}]]></id_product>
+          <id_product_attribute><![CDATA[{{id_comb_kely}}]]></id_product_attribute>
+          <id_address_delivery><![CDATA[{{id_address_rajao}}]]></id_address_delivery>
+          <id_customization><![CDATA[0]]></id_customization>
+          <quantity><![CDATA[2]]></quantity>
+        </cart_row>
+        <cart_row>
+          <id_product><![CDATA[{{id_product_C03}}]]></id_product>
+          <id_product_attribute><![CDATA[0]]></id_product_attribute>
+          <id_address_delivery><![CDATA[{{id_address_rajao}}]]></id_address_delivery>
+          <id_customization><![CDATA[0]]></id_customization>
+          <quantity><![CDATA[1]]></quantity>
+        </cart_row>
+      </cart_rows>
+    </associations>
+  </cart>
+</prestashop>
+### => id_cart_2 = 7
+
+@id_cart_2 = 7
+
+###
+
+#### 5.2 - Commande 2
+POST {{webservice_url}}/api/orders
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <order>
+    <id_address_delivery><![CDATA[{{id_address_rajao}}]]></id_address_delivery>
+    <id_address_invoice><![CDATA[{{id_address_rajao}}]]></id_address_invoice>
+    <id_cart><![CDATA[{{id_cart_2}}]]></id_cart>
+    <id_currency><![CDATA[1]]></id_currency>
+    <id_lang><![CDATA[1]]></id_lang>
+    <id_customer><![CDATA[{{id_customer_rajao}}]]></id_customer>
+    <id_carrier><![CDATA[1]]></id_carrier>
+    <module><![CDATA[ps_checkpayment]]></module>
+    <payment><![CDATA[Paiement par chèque]]></payment>
+    <date_add><![CDATA[2026-04-16 00:00:00]]></date_add>
+    <valid><![CDATA[1]]></valid>
+    <total_paid><![CDATA[34.98]]></total_paid>
+    <total_paid_tax_incl><![CDATA[34.98]]></total_paid_tax_incl>
+    <total_paid_tax_excl><![CDATA[31.59]]></total_paid_tax_excl>
+    <total_paid_real><![CDATA[34.98]]></total_paid_real>
+    <total_products><![CDATA[31.59]]></total_products>
+    <total_products_wt><![CDATA[34.98]]></total_products_wt>
+    <total_shipping><![CDATA[0]]></total_shipping>
+    <total_shipping_tax_incl><![CDATA[0]]></total_shipping_tax_incl>
+    <total_shipping_tax_excl><![CDATA[0]]></total_shipping_tax_excl>
+    <total_discounts><![CDATA[0]]></total_discounts>
+    <total_discounts_tax_incl><![CDATA[0]]></total_discounts_tax_incl>
+    <total_discounts_tax_excl><![CDATA[0]]></total_discounts_tax_excl>
+    <total_wrapping><![CDATA[0]]></total_wrapping>
+    <total_wrapping_tax_incl><![CDATA[0]]></total_wrapping_tax_incl>
+    <total_wrapping_tax_excl><![CDATA[0]]></total_wrapping_tax_excl>
+    <conversion_rate><![CDATA[1.000000]]></conversion_rate>
+    <round_mode><![CDATA[2]]></round_mode>
+    <round_type><![CDATA[1]]></round_type>
+    <associations>
+      <order_rows>
+        <order_row>
+          <product_id><![CDATA[{{id_product_T01}}]]></product_id>
+          <product_attribute_id><![CDATA[{{id_comb_kely}}]]></product_attribute_id>
+          <product_quantity><![CDATA[2]]></product_quantity>
+          <product_name><![CDATA[Tshirt (taille : kely)]]></product_name>
+          <product_reference><![CDATA[T_01-kely]]></product_reference>
+          <product_price><![CDATA[13.43]]></product_price>
+          <unit_price_tax_incl><![CDATA[14.99]]></unit_price_tax_incl>
+          <unit_price_tax_excl><![CDATA[13.43]]></unit_price_tax_excl>
+        </order_row>
+        <order_row>
+          <product_id><![CDATA[{{id_product_C03}}]]></product_id>
+          <product_attribute_id><![CDATA[0]]></product_attribute_id>
+          <product_quantity><![CDATA[1]]></product_quantity>
+          <product_name><![CDATA[Casquette]]></product_name>
+          <product_reference><![CDATA[C_03]]></product_reference>
+          <product_price><![CDATA[4.73]]></product_price>
+          <unit_price_tax_incl><![CDATA[5.00]]></unit_price_tax_incl>
+          <unit_price_tax_excl><![CDATA[4.73]]></unit_price_tax_excl>
+        </order_row>
+      </order_rows>
+    </associations>
+  </order>
+</prestashop>
+### => id_order_2 = 7
+
+@id_order_2 = 7
+
+###
+
+#### 5.3 - Historique commande 2 : Paiement accepté (state=2)
+POST {{webservice_url}}/api/order_histories
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <order_history>
+    <id_order><![CDATA[{{id_order_2}}]]></id_order>
+    <id_order_state><![CDATA[2]]></id_order_state>
+    <id_employee><![CDATA[1]]></id_employee>
+  </order_history>
+</prestashop>
+
+###
+
+#### 5.4 - Enregistrement du paiement commande 2
+# order_reference = référence alphanumérique générée par PrestaShop (pas l'id).
+# Récupérer la référence dans la réponse du POST /api/orders (champ <reference>).
+POST {{webservice_url}}/api/order_payments
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <order_payment>
+    <order_reference><![CDATA[REFERENCE_COMMANDE_2]]></order_reference>
+    <id_currency><![CDATA[1]]></id_currency>
+    <amount><![CDATA[34.98]]></amount>
+    <payment_method><![CDATA[Paiement par chèque]]></payment_method>
+    <conversion_rate><![CDATA[1.000000]]></conversion_rate>
+    <date_add><![CDATA[2026-04-16 00:00:00]]></date_add>
+  </order_payment>
+</prestashop>
+
+###
+
+
+
+
+# =============================================================================
+# COMMANDE 3 - Rakoto | T_01 kely x1 | Erreur de paiement
+# =============================================================================
+# Stratégie : créer la commande avec ps_cashondelivery (state=13 automatique),
+# puis forcer le passage en state=8 via order_history.
+# total_paid_real = 0 car aucun paiement encaissé.
+# valid = 0 car commande non validée.
+
+#### 6.1 - Panier commande 3
+POST {{webservice_url}}/api/carts
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <cart>
+    <id_address_delivery><![CDATA[{{id_address_rakoto}}]]></id_address_delivery>
+    <id_address_invoice><![CDATA[{{id_address_rakoto}}]]></id_address_invoice>
+    <id_currency><![CDATA[1]]></id_currency>
+    <id_customer><![CDATA[{{id_customer_rakoto}}]]></id_customer>
+    <id_lang><![CDATA[1]]></id_lang>
+    <id_shop><![CDATA[1]]></id_shop>
+    <id_shop_group><![CDATA[1]]></id_shop_group>
+    <id_carrier><![CDATA[1]]></id_carrier>
+    <delivery_option><![CDATA[{"{{id_address_rakoto}}":"1,"}]]></delivery_option>
+    <recyclable><![CDATA[0]]></recyclable>
+    <gift><![CDATA[0]]></gift>
+    <associations>
+      <cart_rows>
+        <cart_row>
+          <id_product><![CDATA[{{id_product_T01}}]]></id_product>
+          <id_product_attribute><![CDATA[{{id_comb_kely}}]]></id_product_attribute>
+          <id_address_delivery><![CDATA[{{id_address_rakoto}}]]></id_address_delivery>
+          <id_customization><![CDATA[0]]></id_customization>
+          <quantity><![CDATA[1]]></quantity>
+        </cart_row>
+      </cart_rows>
+    </associations>
+  </cart>
+</prestashop>
+### => id_cart_3 = 8
+
+@id_cart_3 = 8
+
+###
+
+#### 6.2 - Commande 3
+POST {{webservice_url}}/api/orders
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <order>
+    <id_address_delivery><![CDATA[{{id_address_rakoto}}]]></id_address_delivery>
+    <id_address_invoice><![CDATA[{{id_address_rakoto}}]]></id_address_invoice>
+    <id_cart><![CDATA[{{id_cart_3}}]]></id_cart>
+    <id_currency><![CDATA[1]]></id_currency>
+    <id_lang><![CDATA[1]]></id_lang>
+    <id_customer><![CDATA[{{id_customer_rakoto}}]]></id_customer>
+    <id_carrier><![CDATA[1]]></id_carrier>
+    <module><![CDATA[ps_cashondelivery]]></module>
+    <payment><![CDATA[Paiement comptant à la livraison (Cash on delivery)]]></payment>
+    <date_add><![CDATA[2026-05-07 00:00:00]]></date_add>
+    <valid><![CDATA[0]]></valid>
+    <total_paid><![CDATA[14.99]]></total_paid>
+    <total_paid_tax_incl><![CDATA[14.99]]></total_paid_tax_incl>
+    <total_paid_tax_excl><![CDATA[13.43]]></total_paid_tax_excl>
+    <total_paid_real><![CDATA[0]]></total_paid_real>
+    <total_products><![CDATA[13.43]]></total_products>
+    <total_products_wt><![CDATA[14.99]]></total_products_wt>
+    <total_shipping><![CDATA[0]]></total_shipping>
+    <total_shipping_tax_incl><![CDATA[0]]></total_shipping_tax_incl>
+    <total_shipping_tax_excl><![CDATA[0]]></total_shipping_tax_excl>
+    <total_discounts><![CDATA[0]]></total_discounts>
+    <total_discounts_tax_incl><![CDATA[0]]></total_discounts_tax_incl>
+    <total_discounts_tax_excl><![CDATA[0]]></total_discounts_tax_excl>
+    <total_wrapping><![CDATA[0]]></total_wrapping>
+    <total_wrapping_tax_incl><![CDATA[0]]></total_wrapping_tax_incl>
+    <total_wrapping_tax_excl><![CDATA[0]]></total_wrapping_tax_excl>
+    <conversion_rate><![CDATA[1.000000]]></conversion_rate>
+    <round_mode><![CDATA[2]]></round_mode>
+    <round_type><![CDATA[1]]></round_type>
+    <associations>
+      <order_rows>
+        <order_row>
+          <product_id><![CDATA[{{id_product_T01}}]]></product_id>
+          <product_attribute_id><![CDATA[{{id_comb_kely}}]]></product_attribute_id>
+          <product_quantity><![CDATA[1]]></product_quantity>
+          <product_name><![CDATA[Tshirt (taille : kely)]]></product_name>
+          <product_reference><![CDATA[T_01-kely]]></product_reference>
+          <product_price><![CDATA[13.43]]></product_price>
+          <unit_price_tax_incl><![CDATA[14.99]]></unit_price_tax_incl>
+          <unit_price_tax_excl><![CDATA[13.43]]></unit_price_tax_excl>
+        </order_row>
+      </order_rows>
+    </associations>
+  </order>
+</prestashop>
+### => id_order_3 = 8
+
+@id_order_3 = 8
+
+###
+
+#### 6.3 - Historique commande 3 : Erreur de paiement (state=8)
+# Passage forcé en state=8 après création en state=13.
+POST {{webservice_url}}/api/order_histories
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <order_history>
+    <id_order><![CDATA[{{id_order_3}}]]></id_order>
+    <id_order_state><![CDATA[8]]></id_order_state>
+    <id_employee><![CDATA[1]]></id_employee>
+  </order_history>
+</prestashop>
+
+###
+
+
+
+
+# =============================================================================
+# RECAP
+# =============================================================================
+# Cmd 1 : Rakoto | T_01 ngoza x3  | 37,50€ TTC | state=13 En attente paiement livraison
+# Cmd 2 : Rajao  | T_01 kely x2   | 34,98€ TTC | state=2  Paiement accepté
+#                | C_03 x1        |            |
+# Cmd 3 : Rakoto | T_01 kely x1   | 14,99€ TTC | state=8  Erreur de paiement
+# =============================================================================
