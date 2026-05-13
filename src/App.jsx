@@ -5,15 +5,37 @@ import Produit from "./frontoffice/pages/Produit";
 import FormProduit from "./backoffice/pages/FormProduit";
 import ImportCsv from "./backoffice/pages/ImportCsv";
 import Login from "./backoffice/pages/Login";
+import ProtectedRoute from "./shared/ProtectedRoute";
 
 function App() {
   return (
     <Routes>
       <Route path="/backoffice/login" element={<Login />} />
       <Route path="/produits/:id" element={<Produit />} />
-      <Route path="/produits" element={<ListeProduits />} />
-      <Route path="/produits/create" element={<FormProduit />} />
-      <Route path="/produits/import" element={<ImportCsv />} />
+      <Route
+        path="/produits"
+        element={
+          <ProtectedRoute>
+            <ListeProduits />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/produits/create"
+        element={
+          <ProtectedRoute>
+            <FormProduit />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/produits/import"
+        element={
+          <ProtectedRoute>
+            <ImportCsv />
+          </ProtectedRoute>
+        }
+      />
     </Routes>
   );
 }

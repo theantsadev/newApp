@@ -1,12 +1,23 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { PRESTASHOP_API_KEY } from "../../config/prestashop";
-import { setStoredApiKey, verifyApiKey } from "../../shared/authStorage";
+import {
+  isAuthenticated,
+  setStoredApiKey,
+  verifyApiKey,
+} from "../../shared/authStorage";
 
 const Login = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [apiKey, setApiKey] = useState(PRESTASHOP_API_KEY);
   const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (isAuthenticated()) {
+      navigate("/produits", { replace: true });
+    }
+  }, [navigate]);
 
   const handleSubmit = (event) => {
     event.preventDefault();
@@ -25,7 +36,8 @@ const Login = () => {
     }
 
     setStoredApiKey(cleaned);
-    navigate("/produits", { replace: true });
+    const redirectTo = location.state?.from?.pathname || "/produits";
+    navigate(redirectTo, { replace: true });
   };
 
   return (
