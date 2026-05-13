@@ -1,9 +1,9 @@
 // App.jsx
 import { Routes, Route } from "react-router-dom";
-import ListeProduits from "./components/ListeProduits";
-import Produit from "./components/Produit";
-import FormProduit from "./components/FormProduit";
-import ImportCsv from "./components/ImportCSV";
+import ListeProduits from "./backoffice/pages/ListeProduits";
+import Produit from "./frontoffice/pages/Produit";
+import FormProduit from "./backoffice/pages/FormProduit";
+import ImportCsv from "./backoffice/pages/ImportCsv";
 
 function App() {
   return (
@@ -12,7 +12,6 @@ function App() {
       <Route path="/produits/:id" element={<Produit />} />
       <Route path="/produits/create" element={<FormProduit />} />
       <Route path="/produits/import" element={<ImportCsv />} />
-
     </Routes>
   );
 }

@@ -1,11 +1,6 @@
 import { useState, useRef } from "react";
 import Papa from "papaparse";
-
-const webserviceUrl = "/prestashop-api";
-const webserviceKey = "BG8EDFE4NBE7AWS5EFC124F9UPNPWIT2";
-const auth = () => `Basic ${btoa(`${webserviceKey}:`)}`;
-
-// ─── Configuration des ressources ───────────────────────────────────────────
+import { deleteOne, getAllIds, postXml } from "../../services/prestashopClient";
 
 const RESSOURCES = [
   {
@@ -97,14 +92,14 @@ const RESSOURCES = [
     },
   },
   {
-    label: "Catégories",
+    label: "Categories",
     endpoint: "categories",
     tag: "category",
     mapping: (row) => ({
       id_parent: row["Parent category"] || "2",
       active: row["Active (0/1)"] || "1",
       name_1: row["Name *"] || "",
-      name_2: row["Name *"] || "", // même valeur si pas de colonne EN
+      name_2: row["Name *"] || "",
       description_1: row["Description"] || "",
       description_2: row["Description"] || "",
       link_rewrite_1: row["URL rewritten"] || "",
@@ -142,59 +137,10 @@ const RESSOURCES = [
   },
 ];
 
-// ─── Utilitaires API ─────────────────────────────────────────────────────────
-
-const getAllIds = async (endpoint, tag) => {
-  const resp = await fetch(`${webserviceUrl}/api/${endpoint}`, {
-    headers: { Authorization: auth() },
-  });
-  if (!resp.ok) throw new Error(`GET ${endpoint} → HTTP ${resp.status}`);
-  const xml = await resp.text();
-  const dom = new DOMParser().parseFromString(xml, "text/xml");
-  return Array.from(dom.querySelectorAll(tag)).map((n) => n.getAttribute("id"));
-};
-
-const deleteOne = async (endpoint, id) => {
-  const resp = await fetch(`${webserviceUrl}/api/${endpoint}/${id}`, {
-    method: "DELETE",
-    headers: { Authorization: auth() },
-  });
-  if (!resp.ok)
-    throw new Error(`DELETE ${endpoint}/${id} → HTTP ${resp.status}`);
-};
-
-const postOne = async (endpoint, xml) => {
-  console.log("XML envoyé :", xml); // ✅ voir ce qui part
-
-  const resp = await fetch(`${webserviceUrl}/api/${endpoint}`, {
-    method: "POST",
-    headers: {
-      Authorization: auth(),
-      "Content-Type": "application/xml",
-    },
-    body: xml,
-  });
-
-  if (!resp.ok) {
-    const errXml = await resp.text();
-    console.log("Réponse erreur PrestaShop :", errXml); // ✅ voir pourquoi ça refuse
-    const dom = new DOMParser().parseFromString(errXml, "text/xml");
-    const message = dom.querySelector("message")?.textContent || errXml;
-    throw new Error(`HTTP ${resp.status} — ${message}`);
-  }
-
-  const xmlText = await resp.text();
-  const dom = new DOMParser().parseFromString(xmlText, "text/xml");
-  return dom.querySelector("id")?.textContent || "?";
-};
-
-// ─── Composant principal ─────────────────────────────────────────────────────
-
 const ImportCsv = () => {
   const fileRef = useRef();
 
-  // Import
-  const [onglet, setOnglet] = useState("import"); // "import" | "reinit"
+  const [onglet, setOnglet] = useState("import");
   const [endpointSelectionne, setEndpointSelectionne] = useState(
     RESSOURCES[0].endpoint,
   );
@@ -203,12 +149,9 @@ const ImportCsv = () => {
   const [enCours, setEnCours] = useState(false);
   const [rapport, setRapport] = useState(null);
 
-  // Réinitialisation
   const [selectionReinit, setSelectionReinit] = useState([]);
   const [progressionReinit, setProgressionReinit] = useState({});
   const [rapportReinit, setRapportReinit] = useState(null);
-
-  // ── Import CSV ──────────────────────────────────────────────────────────────
 
   const handleCsv = (e) => {
     const file = e.target.files[0];
@@ -238,7 +181,7 @@ const ImportCsv = () => {
       try {
         const fields = ressource.mapping(row);
         const xml = ressource.buildXml(fields);
-        const id = await postOne(ressource.endpoint, xml);
+        const id = await postXml(ressource.endpoint, xml);
         succes.push({ index: index + 1, id });
       } catch (err) {
         erreurs.push({ index: index + 1, ligne: row, erreur: err.message });
@@ -249,8 +192,6 @@ const ImportCsv = () => {
     setRapport({ succes, erreurs });
     setEnCours(false);
   };
-
-  // ── Réinitialisation ────────────────────────────────────────────────────────
 
   const toggleReinit = (endpoint) => {
     setSelectionReinit((prev) =>
@@ -295,17 +236,14 @@ const ImportCsv = () => {
     setEnCours(false);
   };
 
-  // ── Rendu ───────────────────────────────────────────────────────────────────
-
   const ressourceActive = RESSOURCES.find(
     (r) => r.endpoint === endpointSelectionne,
   );
 
   return (
     <div>
-      <h1>Gestion des données PrestaShop</h1>
+      <h1>Gestion des donnees PrestaShop</h1>
 
-      {/* Onglets */}
       <div>
         <button
           onClick={() => setOnglet("import")}
@@ -317,18 +255,16 @@ const ImportCsv = () => {
           onClick={() => setOnglet("reinit")}
           disabled={onglet === "reinit"}
         >
-          Réinitialisation
+          Reinitialisation
         </button>
       </div>
 
       <hr />
 
-      {/* ── Onglet Import ── */}
       {onglet === "import" && (
         <div>
           <h2>Import CSV</h2>
 
-          {/* Choix de la ressource */}
           <div>
             <label>Ressource cible : </label>
             <select
@@ -351,10 +287,9 @@ const ImportCsv = () => {
 
           <br />
 
-          {/* Colonnes attendues */}
           <details>
             <summary>
-              Colonnes CSV attendues pour « {ressourceActive.label} »
+              Colonnes CSV attendues pour "{ressourceActive.label}"
             </summary>
             <ul>
               {Object.keys(ressourceActive.mapping({})).map((col) => (
@@ -365,7 +300,6 @@ const ImportCsv = () => {
 
           <br />
 
-          {/* Upload fichier */}
           <input
             ref={fileRef}
             type="file"
@@ -374,16 +308,15 @@ const ImportCsv = () => {
             disabled={enCours}
           />
 
-          {/* Aperçu */}
           {lignes.length > 0 && (
             <div>
               <p>
-                {lignes.length} ligne{lignes.length > 1 ? "s" : ""} détectée
+                {lignes.length} ligne{lignes.length > 1 ? "s" : ""} detectee
                 {lignes.length > 1 ? "s" : ""}
               </p>
               <details>
                 <summary>
-                  Aperçu ({Math.min(3, lignes.length)} premières lignes)
+                  Apercu ({Math.min(3, lignes.length)} premieres lignes)
                 </summary>
                 <table border={1}>
                   <thead>
@@ -414,7 +347,6 @@ const ImportCsv = () => {
             </div>
           )}
 
-          {/* Barre de progression */}
           {enCours && (
             <div>
               <progress
@@ -426,14 +358,11 @@ const ImportCsv = () => {
             </div>
           )}
 
-          {/* Rapport import */}
           {rapport && (
             <div>
               <h3>Rapport d'import</h3>
-              <p style={{ color: "green" }}>✓ {rapport.succes.length} succès</p>
-              <p style={{ color: "red" }}>
-                ✗ {rapport.erreurs.length} erreur(s)
-              </p>
+              <p style={{ color: "green" }}>OK {rapport.succes.length} succes</p>
+              <p style={{ color: "red" }}>KO {rapport.erreurs.length} erreur(s)</p>
 
               {rapport.erreurs.length > 0 && (
                 <details>
@@ -461,20 +390,18 @@ const ImportCsv = () => {
         </div>
       )}
 
-      {/* ── Onglet Réinitialisation ── */}
       {onglet === "reinit" && (
         <div>
-          <h2>Réinitialisation des données</h2>
+          <h2>Reinitialisation des donnees</h2>
           <p style={{ color: "red" }}>
-            ⚠ Cette action supprime définitivement toutes les entrées
-            sélectionnées.
+            Attention : cette action supprime definitivement toutes les
+            entrees selectionnees.
           </p>
 
-          {/* Sélection des ressources */}
           <table border={1}>
             <thead>
               <tr>
-                <th>Sélection</th>
+                <th>Selection</th>
                 <th>Ressource</th>
                 <th>Progression</th>
               </tr>
@@ -514,19 +441,18 @@ const ImportCsv = () => {
             style={{ color: "red" }}
           >
             {enCours
-              ? "Réinitialisation en cours..."
-              : `Réinitialiser (${selectionReinit.length} ressource(s) sélectionnée(s))`}
+              ? "Reinitialisation en cours..."
+              : `Reinitialiser (${selectionReinit.length} ressource(s) selectionnee(s))`}
           </button>
 
-          {/* Rapport réinitialisation */}
           {rapportReinit && (
             <div>
-              <h3>Rapport de réinitialisation</h3>
+              <h3>Rapport de reinitialisation</h3>
               <table border={1}>
                 <thead>
                   <tr>
                     <th>Ressource</th>
-                    <th>Supprimés</th>
+                    <th>Supprimes</th>
                     <th>Erreurs</th>
                   </tr>
                 </thead>
@@ -538,7 +464,7 @@ const ImportCsv = () => {
                     return (
                       <tr key={endpoint}>
                         <td>{ressource?.label}</td>
-                        <td style={{ color: "green" }}>✓ {r.succes}</td>
+                        <td style={{ color: "green" }}>OK {r.succes}</td>
                         <td
                           style={{
                             color: r.erreurs.length > 0 ? "red" : "inherit",
@@ -548,7 +474,7 @@ const ImportCsv = () => {
                             ? r.erreurs
                                 .map((e) => `${e.id} : ${e.erreur}`)
                                 .join(", ")
-                            : "—"}
+                            : "-"}
                         </td>
                       </tr>
                     );
