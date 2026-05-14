@@ -1,7 +1,4 @@
-// Énoncé : Créer une application Todo avec : ajout d’une tâche,
-// suppression, et affichage du nombre de tâches restantes.
-
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 const TodoList = () => {
   const [taches, setTaches] = useState([
@@ -14,12 +11,7 @@ const TodoList = () => {
     duree: 0,
   });
 
-  const getColorByDuree = (duree) => {
-    if (duree >= 5) {
-      return "red";
-    }
-    return "blue";
-  };
+  const getColorByDuree = (duree) => (duree >= 5 ? "red" : "blue");
 
   const ajouterTache = () => setTaches([...taches, nouvelleTache]);
   const enleverTache = (indice) =>
@@ -27,13 +19,11 @@ const TodoList = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-
     ajouterTache();
   };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-
     setNouvelleTache({ ...nouvelleTache, [name]: value });
   };
 
@@ -42,12 +32,12 @@ const TodoList = () => {
       <p>Nombres de taches restantes : {taches.length}</p>
       <ul>
         {taches.map((tache, indice) => (
-          <div>
-            <li key={indice} style={{ color: getColorByDuree(tache.duree) }}>
+          <div key={indice}>
+            <li style={{ color: getColorByDuree(tache.duree) }}>
               Titre : {tache.titre} - Action : {tache.action} - Duree :{" "}
               {tache.duree}
             </li>
-            <button onClick={enleverTache(indice)}>Enlever</button>
+            <button onClick={() => enleverTache(indice)}>Enlever</button>
           </div>
         ))}
       </ul>

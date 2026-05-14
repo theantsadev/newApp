@@ -1,28 +1,19 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { XMLParser } from "fast-xml-parser";
+import { fetchProductById } from "../../services/productService";
 
 const Produit = () => {
   const { id } = useParams();
-
   const navigate = useNavigate();
 
   const [produit, setProduit] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const webserviceUrl = "/prestashop-api";
-  const webserviceKey = "BG8EDFE4NBE7AWS5EFC124F9UPNPWIT2";
-
   const getValue = (field) => {
     if (field == null) return "";
-
-    // Si c'est déjà une valeur simple
-    if (typeof field !== "object") {
-      return field;
-    }
-
-    // Si fast-xml-parser retourne un objet XML
+    if (typeof field !== "object") return field;
     return field["#text"] || "";
   };
 
@@ -35,9 +26,7 @@ const Produit = () => {
     });
 
     const json = parser.parse(xmlString);
-
     const product = json.prestashop.product;
-    console.log(product);
 
     return {
       id: getValue(product.id),
@@ -48,7 +37,6 @@ const Produit = () => {
       actif: getValue(product.active),
       condition: getValue(product.condition),
       date_ajout: getValue(product.date_add),
-
       nom: getValue(product.name?.language),
       description: getValue(product.description?.language),
       description_courte: getValue(product.description_short?.language),
@@ -57,44 +45,20 @@ const Produit = () => {
   };
 
   useEffect(() => {
-    fetch(`${webserviceUrl}/api/products/${id}`, {
-      method: "GET",
-      headers: {
-        Authorization: `Basic ${btoa(`${webserviceKey}:`)}`,
-      },
-    })
-      .then((resp) => {
-        if (!resp.ok) {
-          throw new Error(`HTTP ${resp.status}`);
-        }
-
-        return resp.text();
-      })
+    fetchProductById(id)
       .then((xmlText) => {
-        console.log(xmlText);
-
         const data = parseXml(xmlText);
-
-        console.log(data);
-
         setProduit(data);
         setLoading(false);
       })
       .catch((err) => {
-        console.error(err);
-
         setError(err);
         setLoading(false);
       });
   }, [id]);
 
-  if (error) {
-    return <div>Erreur : {error.message}</div>;
-  }
-
-  if (loading) {
-    return <div>Chargement ...</div>;
-  }
+  if (error) return <div>Erreur : {error.message}</div>;
+  if (loading) return <div>Chargement ...</div>;
 
   return (
     <div>
@@ -109,16 +73,16 @@ const Produit = () => {
 
           <tr>
             <th>Prix</th>
-            <td>{produit.prix} €</td>
+            <td>{produit.prix} EUR</td>
           </tr>
 
           <tr>
-            <th>Référence</th>
-            <td>{produit.reference || "—"}</td>
+            <th>Reference</th>
+            <td>{produit.reference || "-"}</td>
           </tr>
 
           <tr>
-            <th>Quantité</th>
+            <th>Quantite</th>
             <td>{produit.quantite}</td>
           </tr>
 
@@ -133,19 +97,19 @@ const Produit = () => {
           </tr>
 
           <tr>
-            <th>Ajouté le</th>
+            <th>Ajoute le</th>
             <td>{produit.date_ajout}</td>
           </tr>
 
           <tr>
             <th>Description</th>
-            <td>{produit.description || "—"}</td>
+            <td>{produit.description || "-"}</td>
           </tr>
         </tbody>
       </table>
 
       <button onClick={() => navigate(-1)}>
-        Retourner à la page précédente
+        Retourner a la page precedente
       </button>
     </div>
   );

@@ -1,5 +1,3 @@
-// Énoncé : Créer un composant Compteur avec un affichage du compte, un bouton +, un bouton - et
-// un bouton Reset. Le compte ne peut pas descendre en dessous de 0.
 import { useState } from "react";
 
 const Compteur = () => {

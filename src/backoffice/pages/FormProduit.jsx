@@ -1,10 +1,9 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { createProductFromXml } from "../../services/productService";
 
 const FormProduit = () => {
   const navigate = useNavigate();
-  const webserviceUrl = "/prestashop-api";
-  const webserviceKey = "BG8EDFE4NBE7AWS5EFC124F9UPNPWIT2";
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -33,7 +32,6 @@ const FormProduit = () => {
     available_for_order: true,
     online_only: false,
     on_sale: false,
-    // Champs multilingues
     name_1: "",
     name_2: "",
     description_1: "",
@@ -102,14 +100,6 @@ const FormProduit = () => {
 </prestashop>`;
   };
 
-  const parseXmlResponse = (xmlString) => {
-    const dom = new DOMParser().parseFromString(xmlString, "text/xml");
-    const get = (sel) => dom.querySelector(sel)?.textContent.trim() || "";
-    return {
-      id: get("product > id"),
-    };
-  };
-
   const handleSubmit = () => {
     setLoading(true);
     setError(null);
@@ -117,25 +107,12 @@ const FormProduit = () => {
 
     const xml = buildXml();
 
-    fetch(`${webserviceUrl}/api/products`, {
-      method: "POST",
-      headers: {
-        Authorization: `Basic ${btoa(`${webserviceKey}:`)}`,
-        "Content-Type": "application/xml",
-      },
-      body: xml,
-    })
-      .then((resp) => {
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        return resp.text();
-      })
-      .then((xmlText) => {
-        const data = parseXmlResponse(xmlText);
-        setSuccess(`Produit créé avec succès — ID : ${data.id}`);
+    createProductFromXml(xml)
+      .then((id) => {
+        setSuccess(`Produit cree avec succes - ID : ${id}`);
         setLoading(false);
       })
       .catch((err) => {
-        console.error(err.message);
         setError(err);
         setLoading(false);
       });
@@ -181,16 +158,16 @@ const FormProduit = () => {
 
   return (
     <div>
-      <h1>Créer un produit</h1>
+      <h1>Creer un produit</h1>
 
       {error && <div style={{ color: "red" }}>Erreur : {error.message}</div>}
       {success && <div style={{ color: "green" }}>{success}</div>}
 
-      <h2>Informations générales</h2>
+      <h2>Informations generales</h2>
       <table border={1}>
         <tbody>
           <tr>
-            <th>Référence</th>
+            <th>Reference</th>
             <td>
               <input
                 name="reference"
@@ -200,7 +177,7 @@ const FormProduit = () => {
             </td>
           </tr>
           <tr>
-            <th>Référence fournisseur</th>
+            <th>Reference fournisseur</th>
             <td>
               <input
                 name="supplier_reference"
@@ -265,7 +242,7 @@ const FormProduit = () => {
             </td>
           </tr>
           <tr>
-            <th>ID Catégorie défaut</th>
+            <th>ID Categorie defaut</th>
             <td>
               <input
                 type="number"
@@ -292,10 +269,10 @@ const FormProduit = () => {
       <h2>Contenu multilingue</h2>
       <div>
         <button onClick={() => setActiveLang(1)} disabled={activeLang === 1}>
-          🇫🇷 FR
+          FR
         </button>
         <button onClick={() => setActiveLang(2)} disabled={activeLang === 2}>
-          🇬🇧 EN
+          EN
         </button>
       </div>
       <table border={1}>
@@ -347,7 +324,7 @@ const FormProduit = () => {
       <table border={1}>
         <tbody>
           <tr>
-            <th>Prix HT (€)</th>
+            <th>Prix HT (EUR)</th>
             <td>
               <input
                 type="number"
@@ -360,7 +337,7 @@ const FormProduit = () => {
             </td>
           </tr>
           <tr>
-            <th>Prix grossiste (€)</th>
+            <th>Prix grossiste (EUR)</th>
             <td>
               <input
                 type="number"
@@ -373,7 +350,7 @@ const FormProduit = () => {
             </td>
           </tr>
           <tr>
-            <th>Prix unitaire (€)</th>
+            <th>Prix unitaire (EUR)</th>
             <td>
               <input
                 type="number"
@@ -386,7 +363,7 @@ const FormProduit = () => {
             </td>
           </tr>
           <tr>
-            <th>Quantité minimale</th>
+            <th>Quantite minimale</th>
             <td>
               <input
                 type="number"
@@ -473,7 +450,7 @@ const FormProduit = () => {
             </td>
           </tr>
           <tr>
-            <th>Disponible à la commande</th>
+            <th>Disponible a la commande</th>
             <td>
               <input
                 type="checkbox"
@@ -509,10 +486,10 @@ const FormProduit = () => {
       </table>
 
       <br />
-      <button onClick={handleReset}>Réinitialiser</button>
-      <button onClick={handleSubmit}>Créer le produit</button>
+      <button onClick={handleReset}>Reinitialiser</button>
+      <button onClick={handleSubmit}>Creer le produit</button>
       <button onClick={() => navigate(-1)}>
-        Retourner à la page précédente
+        Retourner a la page precedente
       </button>
     </div>
   );

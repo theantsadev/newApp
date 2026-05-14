@@ -1,18 +1,50 @@
 // App.jsx
 import { Routes, Route } from "react-router-dom";
-import ListeProduits from "./components/ListeProduits";
-import Produit from "./components/Produit";
-import FormProduit from "./components/FormProduit";
-import ImportCsv from "./components/ImportCSV";
+import ListeProduits from "./backoffice/pages/ListeProduits";
+import Produit from "./frontoffice/pages/Produit";
+import FormProduit from "./backoffice/pages/FormProduit";
+import ImportCsv from "./backoffice/pages/ImportCsv";
+import Login from "./backoffice/pages/Login";
+import ResetData from "./backoffice/pages/ResetData";
+import ProtectedRoute from "./shared/ProtectedRoute";
 
 function App() {
   return (
     <Routes>
-      <Route path="/produits" element={<ListeProduits />} />
+      <Route path="/backoffice/login" element={<Login />} />
+      <Route
+        path="/backoffice/reset-data"
+        element={
+          <ProtectedRoute>
+            <ResetData />
+          </ProtectedRoute>
+        }
+      />
       <Route path="/produits/:id" element={<Produit />} />
-      <Route path="/produits/create" element={<FormProduit />} />
-      <Route path="/produits/import" element={<ImportCsv />} />
-
+      <Route
+        path="/produits"
+        element={
+          <ProtectedRoute>
+            <ListeProduits />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/produits/create"
+        element={
+          <ProtectedRoute>
+            <FormProduit />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/produits/import"
+        element={
+          <ProtectedRoute>
+            <ImportCsv />
+          </ProtectedRoute>
+        }
+      />
     </Routes>
   );
 }
