@@ -42,6 +42,18 @@ export const deleteOne = async (endpoint, id) => {
   await requestXml(`${endpoint}/${id}`, { method: "DELETE" });
 };
 
+
+export const patchXml = async (endpoint, xmlText) => {
+  const responseText = await requestXml(endpoint, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/xml" },
+    body: xmlText,
+  });
+
+  const dom = parseXmlDoc(responseText);
+  return getTextContent(dom, "id") || "?";
+};
+
 export const postXml = async (endpoint, xmlText) => {
   const responseText = await requestXml(endpoint, {
     method: "POST",
