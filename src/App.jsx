@@ -8,6 +8,7 @@ import Login from "./backoffice/pages/Login";
 import ResetData from "./backoffice/pages/ResetData";
 import ImportData from "./backoffice/pages/ImportData";
 import ProtectedRoute from "./shared/ProtectedRoute";
+import ListeCommandes from "./backoffice/pages/ListeCommandes";
 
 function App() {
   return (
@@ -51,6 +52,14 @@ function App() {
         element={
           <ProtectedRoute>
             <ImportCsv />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/commandes"
+        element={
+          <ProtectedRoute>
+            <ListeCommandes />
           </ProtectedRoute>
         }
       />
