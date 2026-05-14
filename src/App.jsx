@@ -6,6 +6,7 @@ import FormProduit from "./backoffice/pages/FormProduit";
 import ImportCsv from "./backoffice/pages/ImportCsv";
 import Login from "./backoffice/pages/Login";
 import ResetData from "./backoffice/pages/ResetData";
+import ImportData from "./backoffice/pages/ImportData";
 import ProtectedRoute from "./shared/ProtectedRoute";
 
 function App() {
@@ -17,6 +18,14 @@ function App() {
         element={
           <ProtectedRoute>
             <ResetData />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/backoffice/import-data"
+        element={
+          <ProtectedRoute>
+            <ImportData />
           </ProtectedRoute>
         }
       />

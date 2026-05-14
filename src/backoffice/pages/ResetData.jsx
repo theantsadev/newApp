@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { deleteOne, getAllIds } from "../../services/prestashopClient";
+import { deleteOne, getAllIds, requestXml } from "../../services/prestashopClient";
+import { parseXmlDoc } from "../../shared/xmlUtils";
 
 const RESET_RESOURCES = [
   {
@@ -142,7 +143,38 @@ const ResetData = () => {
 
         for (const [index, id] of ids.entries()) {
           try {
-            await deleteOne(resource.endpoint, id);
+            if (resource.key === "stock_availables") {
+              const xmlText = await requestXml(`stock_availables/${id}`);
+              const dom = parseXmlDoc(xmlText);
+              const stock = dom.querySelector("stock_available");
+              const productId = stock
+                ?.querySelector("id_product")
+                ?.textContent.trim();
+              const attributeId = stock
+                ?.querySelector("id_product_attribute")
+                ?.textContent.trim();
+
+              const updateXml = `<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <stock_available>
+    <id><![CDATA[${id}]]></id>
+    <id_product><![CDATA[${productId}]]></id_product>
+    <id_product_attribute><![CDATA[${attributeId}]]></id_product_attribute>
+    <quantity><![CDATA[0]]></quantity>
+    <depends_on_stock><![CDATA[0]]></depends_on_stock>
+    <out_of_stock><![CDATA[1]]></out_of_stock>
+  </stock_available>
+</prestashop>`;
+
+              await requestXml(`stock_availables/${id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/xml" },
+                body: updateXml,
+              });
+            } else {
+              await deleteOne(resource.endpoint, id);
+            }
+
             rapportFinal[resource.key].succes++;
           } catch (err) {
             rapportFinal[resource.key].erreurs.push(
