@@ -22,7 +22,8 @@ export const requestXml = async (path, options = {}) => {
 
   if (!resp.ok) {
     const message = extractErrorMessage(xmlText);
-    const suffix = message ? ` - ${message}` : "";
+    const fallback = xmlText ? ` - ${xmlText.slice(0, 200)}` : "";
+    const suffix = message ? ` - ${message}` : fallback;
     throw new Error(`HTTP ${resp.status}${suffix}`);
   }
 

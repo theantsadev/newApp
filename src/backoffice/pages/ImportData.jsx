@@ -25,6 +25,11 @@ const REQUIRED_HEADERS = {
   commandes: ["date", "nom", "email", "pwd", "adresse", "achat", "etat"],
 };
 
+const TAX_CONFIG = {
+  11.65: { taxName: "TVA FR 11.65%", groupName: "TRG1" },
+  "5.60": { taxName: "TVA FR 5.6%", groupName: "TRG2" },
+};
+
 const formatMissing = (headers, required) =>
   required.filter((col) => !headers.includes(col));
 
@@ -36,6 +41,12 @@ const toNumber = (value) => {
 };
 
 const toPercent = (value) => toNumber(value) / 100;
+
+const calcPriceHt = (priceTtc, taxRate) => {
+  const ttc = toNumber(priceTtc);
+  const rate = toPercent(taxRate); // déjà /100
+  return Math.round((ttc / (1 + rate)) * 100) / 100; // arrondi bancaire 2 décimales
+};
 
 const toIsoDate = (value) => {
   if (!value) return "";
@@ -57,6 +68,21 @@ const normalizeText = (value) =>
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .trim();
+
+const getTaxConfig = (rate) => {
+  const key = Number(rate).toFixed(2);
+  return (
+    TAX_CONFIG[key] || {
+      taxName: `TVA ${key}%`,
+      groupName: `TRG-${key}`,
+    }
+  );
+};
+
+const buildLangXml = (languageIds, value) =>
+  languageIds
+    .map((id) => `<language id="${id}"><![CDATA[${value}]]></language>`)
+    .join("");
 
 const ImportData = () => {
   const [files, setFiles] = useState({
@@ -177,25 +203,31 @@ const ImportData = () => {
     );
     const dom = parseXmlDoc(xmlText);
     const node = dom.querySelector(tag);
-    return node?.getAttribute("id") || "";
+    return node?.querySelector("id")?.textContent?.trim() || "";
   };
 
   const fetchIdByFilters = async (endpoint, tag, filters) => {
     const query = Object.entries(filters)
-      .map(
-        ([key, value]) =>
-          `filter[${key}]=[${encodeURIComponent(value)}]`,
-      )
+      .map(([key, value]) => `filter[${key}]=[${encodeURIComponent(value)}]`)
       .join("&");
     const xmlText = await requestXml(`${endpoint}?${query}&display=[id]`);
     const dom = parseXmlDoc(xmlText);
     const node = dom.querySelector(tag);
-    return node?.getAttribute("id") || "";
+    return node?.querySelector("id")?.textContent?.trim() || "";
   };
 
-  const ensureTaxSetup = async (rate) => {
-    const name = `TVA ${rate}%`;
-    let taxId = await fetchIdByFilter("taxes", "tax", "name", name);
+  const fetchLanguageIds = async () => {
+    const xmlText = await requestXml("languages");
+    const dom = parseXmlDoc(xmlText);
+    const ids = Array.from(dom.querySelectorAll("language"))
+      .map((node) => node.getAttribute("id"))
+      .filter(Boolean);
+    return ids.length > 0 ? ids : ["1"];
+  };
+
+  const ensureTaxSetup = async (rate, languageIds) => {
+    const { taxName, groupName } = getTaxConfig(rate);
+    let taxId = await fetchIdByFilter("taxes", "tax", "name", taxName);
     if (!taxId) {
       const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
@@ -203,15 +235,13 @@ const ImportData = () => {
     <rate><![CDATA[${rate}]]></rate>
     <active><![CDATA[1]]></active>
     <name>
-      <language id="1"><![CDATA[${name}]]></language>
-      <language id="2"><![CDATA[${name}]]></language>
+      ${buildLangXml(languageIds, taxName)}
     </name>
   </tax>
 </prestashop>`;
       taxId = await postXml("taxes", xml);
     }
 
-    const groupName = `TRG-${rate}`;
     let groupId = await fetchIdByFilter(
       "tax_rule_groups",
       "tax_rule_group",
@@ -229,11 +259,11 @@ const ImportData = () => {
       groupId = await postXml("tax_rule_groups", xml);
     }
 
-    const existingRuleId = await fetchIdByFilters(
-      "tax_rules",
-      "tax_rule",
-      { id_tax_rules_group: groupId, id_tax: taxId },
-    );
+    const existingRuleId = await fetchIdByFilters("tax_rules", "tax_rule", {
+      id_tax_rules_group: groupId,
+      id_tax: taxId,
+      id_country: 8,
+    });
     if (!existingRuleId) {
       const ruleXml = `<?xml version="1.0" encoding="UTF-8"?>
 <prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
@@ -249,27 +279,28 @@ const ImportData = () => {
     return groupId;
   };
 
-  const ensureCategory = async (name) => {
+  const ensureCategory = async (name, languageIds) => {
+    const slug = slugify(name);
     let id = await fetchIdByFilter("categories", "category", "name", name);
     if (id) return id;
 
-    const slug = slugify(name);
+    id = await fetchIdByFilter("categories", "category", "link_rewrite", slug);
+    if (id) return id;
+
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
   <category>
     <active><![CDATA[1]]></active>
-    <id_parent><![CDATA[2]]></id_parent>
+    <id_shop_default><![CDATA[1]]></id_shop_default>
+    <id_parent><![CDATA[1]]></id_parent>
     <name>
-      <language id="1"><![CDATA[${name}]]></language>
-      <language id="2"><![CDATA[${name}]]></language>
+      ${buildLangXml(languageIds, name)}
     </name>
     <link_rewrite>
-      <language id="1"><![CDATA[${slug}]]></language>
-      <language id="2"><![CDATA[${slug}]]></language>
+      ${buildLangXml(languageIds, slug)}
     </link_rewrite>
     <description>
-      <language id="1"><![CDATA[${name}]]></language>
-      <language id="2"><![CDATA[${name}]]></language>
+      ${buildLangXml(languageIds, name)}
     </description>
   </category>
 </prestashop>`;
@@ -278,7 +309,13 @@ const ImportData = () => {
     return id;
   };
 
-  const ensureProduct = async (product, taxRuleGroupId, categoryId, type) => {
+  const ensureProduct = async (
+    product,
+    taxRuleGroupId,
+    categoryId,
+    type,
+    languageIds,
+  ) => {
     let id = await fetchIdByFilter(
       "products",
       "product",
@@ -293,6 +330,8 @@ const ImportData = () => {
     <id_category_default><![CDATA[${categoryId}]]></id_category_default>
     <id_tax_rules_group><![CDATA[${taxRuleGroupId}]]></id_tax_rules_group>
     <id_shop_default><![CDATA[1]]></id_shop_default>
+    <state><![CDATA[1]]></state>
+    <show_price><![CDATA[1]]></show_price>
     <reference><![CDATA[${product.reference}]]></reference>
     <price><![CDATA[${product.priceHt.toFixed(2)}]]></price>
     <wholesale_price><![CDATA[${product.wholesaleHt.toFixed(2)}]]></wholesale_price>
@@ -301,20 +340,16 @@ const ImportData = () => {
     <available_for_order><![CDATA[1]]></available_for_order>
     <product_type><![CDATA[${type}]]></product_type>
     <name>
-      <language id="1"><![CDATA[${product.name}]]></language>
-      <language id="2"><![CDATA[${product.name}]]></language>
+      ${buildLangXml(languageIds, product.name)}
     </name>
     <description>
-      <language id="1"><![CDATA[${product.name}]]></language>
-      <language id="2"><![CDATA[${product.name}]]></language>
+      ${buildLangXml(languageIds, product.name)}
     </description>
     <description_short>
-      <language id="1"><![CDATA[${product.name}]]></language>
-      <language id="2"><![CDATA[${product.name}]]></language>
+      ${buildLangXml(languageIds, product.name)}
     </description_short>
     <link_rewrite>
-      <language id="1"><![CDATA[${slugify(product.name)}]]></language>
-      <language id="2"><![CDATA[${slugify(product.name)}]]></language>
+      ${buildLangXml(languageIds, slugify(product.name))}
     </link_rewrite>
     <associations>
       <categories>
@@ -328,7 +363,7 @@ const ImportData = () => {
     return id;
   };
 
-  const ensureOption = async (name, groupType, isColor) => {
+  const ensureOption = async (name, groupType, isColor, languageIds) => {
     let id = await fetchIdByFilter(
       "product_options",
       "product_option",
@@ -343,12 +378,10 @@ const ImportData = () => {
     <is_color_group><![CDATA[${isColor ? 1 : 0}]]></is_color_group>
     <group_type><![CDATA[${groupType}]]></group_type>
     <name>
-      <language id="1"><![CDATA[${name}]]></language>
-      <language id="2"><![CDATA[${name}]]></language>
+      ${buildLangXml(languageIds, name)}
     </name>
     <public_name>
-      <language id="1"><![CDATA[${name}]]></language>
-      <language id="2"><![CDATA[${name}]]></language>
+      ${buildLangXml(languageIds, name)}
     </public_name>
   </product_option>
 </prestashop>`;
@@ -357,7 +390,7 @@ const ImportData = () => {
     return id;
   };
 
-  const ensureOptionValue = async (optionId, name, color) => {
+  const ensureOptionValue = async (optionId, name, color, languageIds) => {
     let id = await fetchIdByFilter(
       "product_option_values",
       "product_option_value",
@@ -373,8 +406,7 @@ const ImportData = () => {
     <id_attribute_group><![CDATA[${optionId}]]></id_attribute_group>
     ${colorTag}
     <name>
-      <language id="1"><![CDATA[${name}]]></language>
-      <language id="2"><![CDATA[${name}]]></language>
+      ${buildLangXml(languageIds, name)}
     </name>
   </product_option_value>
 </prestashop>`;
@@ -413,8 +445,21 @@ const ImportData = () => {
       `stock_availables?filter[id_product]=[${productId}]&filter[id_product_attribute]=[${combinationId}]&display=[id]`,
     );
     const dom = parseXmlDoc(xmlText);
-    const stockId = dom.querySelector("stock_available")?.getAttribute("id");
+
+    // Avant : getAttribute("id") → cherche un attribut XML, retourne null
+    // const stockId = dom.querySelector("stock_available")?.getAttribute("id");
+
+    //  Après : querySelector("id") → cible le noeud enfant <id>
+    const stockId = dom
+      .querySelector("stock_available id")
+      ?.textContent?.trim();
+
+    appendLog(`Stock ID trouvé: ${stockId}`);
     if (!stockId) return;
+
+    appendLog(
+      `Tsy Erreur Stock maj - id:${stockId} produit:${productId} attr:${combinationId} qty:${quantity}`,
+    );
 
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
@@ -433,6 +478,9 @@ const ImportData = () => {
       headers: { "Content-Type": "application/xml" },
       body: xml,
     });
+    appendLog(
+      `Stock maj - id:${stockId} produit:${productId} attr:${combinationId} qty:${quantity}`,
+    );
   };
 
   const uploadProductImage = async (productId, file) => {
@@ -736,12 +784,16 @@ const ImportData = () => {
         };
       });
 
+      const languageIds = await fetchLanguageIds();
+      appendLog(`Langues detectees: ${languageIds.join(", ")}`);
+
       appendLog("Creation des taxes et groupes...");
       const taxGroupByRate = {};
       for (const product of Object.values(productsByRef)) {
         if (!taxGroupByRate[product.taxRate]) {
           taxGroupByRate[product.taxRate] = await ensureTaxSetup(
             product.taxRate,
+            languageIds,
           );
         }
       }
@@ -752,6 +804,7 @@ const ImportData = () => {
         if (!categoryByName[product.category]) {
           categoryByName[product.category] = await ensureCategory(
             product.category,
+            languageIds,
           );
         }
       }
@@ -767,6 +820,7 @@ const ImportData = () => {
           taxGroupByRate[product.taxRate],
           categoryByName[product.category],
           type,
+          languageIds,
         );
         productIds[product.reference] = productId;
       }
@@ -785,6 +839,7 @@ const ImportData = () => {
             specificite,
             isColor ? "color" : "select",
             isColor,
+            languageIds,
           );
         }
 
@@ -795,6 +850,7 @@ const ImportData = () => {
             optionIdByName[specificite],
             karazany,
             colorMap[karazany],
+            languageIds,
           );
         }
       }
@@ -859,11 +915,12 @@ const ImportData = () => {
 
         const items = achatItems.map((item) => {
           const product = productsByRef[item.reference];
-          const basePriceHt = product.priceHt;
+          const basePriceHt = calcPriceHt(product.priceTtc, product.taxRate);
           let supplement = 0;
           let attributeId = 0;
           let label = product.name;
           let ref = item.reference;
+
           if (item.variant) {
             const combRef = `${item.reference}-${item.variant}`;
             attributeId = combinationIds[combRef];
@@ -872,17 +929,21 @@ const ImportData = () => {
                 d.reference === item.reference && d.karazany === item.variant,
             );
             if (declRow) {
-              const priceTtc =
-                toNumber(declRow.prix_vente_ttc) || product.priceTtc;
-              const priceHt = priceTtc / (1 + toPercent(product.taxRate));
-              supplement = priceHt - basePriceHt;
+              const variantPriceHt = calcPriceHt(
+                toNumber(declRow.prix_vente_ttc) || product.priceTtc,
+                product.taxRate,
+              );
+              supplement = variantPriceHt - basePriceHt;
             }
             label = `${product.name} (variante : ${item.variant})`;
             ref = `${item.reference}-${item.variant}`;
           }
 
-          const unitPriceHt = basePriceHt + supplement;
-          const unitPriceTtc = unitPriceHt * (1 + toPercent(product.taxRate));
+          const unitPriceHt =
+            Math.round((basePriceHt + supplement) * 100) / 100;
+          const unitPriceTtc =
+            Math.round(unitPriceHt * (1 + toPercent(product.taxRate)) * 100) /
+            100;
 
           return {
             productId: productIds[item.reference],

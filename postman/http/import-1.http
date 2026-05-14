@@ -174,16 +174,15 @@ Content-Type: application/xml
 # id_parent = 2 = Accueil (racine du catalogue)
 
 #### 4.1 - Catégorie Akanjo (vêtements)
-PATCH {{webservice_url}}/api/categories
+POST {{webservice_url}}/api/categories
 Authorization: Basic {{webservice_basic_auth}}
 Content-Type: application/xml
 
 <?xml version="1.0" encoding="UTF-8"?>
 <prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
   <category>
-    <id><![CDATA[10]]></id>
     <active><![CDATA[1]]></active>
-    <id_parent><![CDATA[2]]></id_parent>
+    <id_parent><![CDATA[]]></id_parent>
     <name>
       <language id="1"><![CDATA[Akanjo]]></language>
     </name>
