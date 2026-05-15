@@ -38,6 +38,7 @@ const Produit = () => {
       condition: getValue(product.condition),
       date_ajout: getValue(product.date_add),
       nom: getValue(product.name?.language),
+      image: getValue(product.associations?.images?.image["@_xlink:href"]),
       description: getValue(product.description?.language),
       description_courte: getValue(product.description_short?.language),
       meta_titre: getValue(product.meta_title?.language),
@@ -66,6 +67,12 @@ const Produit = () => {
 
       <table border={1}>
         <tbody>
+          <tr>
+            <th>Image</th>
+            <td>
+              <img src={produit.image} alt="Sans image" srcset="" />
+            </td>
+          </tr>
           <tr>
             <th>Nom</th>
             <td>{produit.nom || "Sans nom"}</td>

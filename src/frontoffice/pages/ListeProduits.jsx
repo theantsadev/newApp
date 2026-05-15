@@ -55,31 +55,32 @@ const ListeProduits = () => {
     <div>
       <h1>Liste des Produits</h1>
       <br />
-      <button onClick={handleDeleteAll}> Tout supprimer</button>
-      <table border={1}>
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Option1</th>
-            <th>Option2</th>
-          </tr>
-        </thead>
-        <tbody>
-          {produits.map((produit) => (
-            <tr key={produit.id}>
-              <td>{produit.id}</td>
-              <td>
-                <Link to={`/produits/${produit.id}`}>Voir detail</Link>
-              </td>
-              <td>
-                <button onClick={() => handleDelete(produit.id)}>
-                  Supprimer
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <button onClick={handleDeleteAll}>Tout supprimer</button>
+
+      <div>
+        {produits.map((produit) => (
+          <div key={produit.id}>
+            <h3>
+              {produit.nom || "Sans nom"} (#{produit.id})
+            </h3>
+            <p>Prix : {produit.prix} EUR</p>
+            <p>Reference : {produit.reference || "-"}</p>
+            <p>Quantite : {produit.quantite}</p>
+            {produit.image && (
+              <img src={produit.image} alt={produit.nom || "Produit"} />
+            )}
+            <div>
+              <Link to={`/frontoffice/produits/${produit.id}`}>
+                Voir detail
+              </Link>
+              <button onClick={() => handleDelete(produit.id)}>
+                Supprimer
+              </button>
+            </div>
+            <hr />
+          </div>
+        ))}
+      </div>
     </div>
   );
 };
