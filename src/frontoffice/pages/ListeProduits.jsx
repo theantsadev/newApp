@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { deleteProductById, fetchProductList } from "../../services/productService";
+import {
+  deleteProductById,
+  fetchProductList,
+} from "../../services/productService";
 
 const ListeProduits = () => {
   const [produits, setProduits] = useState([]);
