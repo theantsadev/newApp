@@ -1,6 +1,6 @@
 // App.jsx
 import { Routes, Route } from "react-router-dom";
-import ListeProduits from "./backoffice/pages/ListeProduits";
+import ListeProduits from "./frontoffice/pages/ListeProduits";
 import Produit from "./frontoffice/pages/Produit";
 import FormProduit from "./backoffice/pages/FormProduit";
 import ImportCsv from "./backoffice/pages/ImportCsv";
@@ -30,39 +30,16 @@ function App() {
           </ProtectedRoute>
         }
       />
-      <Route path="/produits/:id" element={<Produit />} />
       <Route
-        path="/produits"
-        element={
-          <ProtectedRoute>
-            <ListeProduits />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/produits/create"
-        element={
-          <ProtectedRoute>
-            <FormProduit />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/produits/import"
-        element={
-          <ProtectedRoute>
-            <ImportCsv />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/commandes"
+        path="/backoffice/commandes"
         element={
           <ProtectedRoute>
             <ListeCommandes />
           </ProtectedRoute>
         }
       />
+      <Route path="/frontoffice/produits" element={<ListeProduits />} />
+      <Route path="/frontoffice/produits/:id" element={<Produit />} />
     </Routes>
   );
 }
