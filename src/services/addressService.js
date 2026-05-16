@@ -21,9 +21,9 @@ export const parseAddress = (address) => ({
 export const fetchAddressesByCustomerId = async (idCustomer) => {
   const xmlText = await requestXml(`${ressource}?display=full&filter[id_customer]=[${idCustomer}]`);
   const addresses = parseXmlToJson(xmlText)?.prestashop?.addresses?.address;
-  
+
   if (!addresses) return [];
-  
+
   const addressList = Array.isArray(addresses) ? addresses : [addresses];
   const response = [];
   addressList.forEach((address) => {
