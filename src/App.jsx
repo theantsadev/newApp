@@ -9,7 +9,11 @@ import ResetData from "./backoffice/pages/ResetData";
 import ImportData from "./backoffice/pages/ImportData";
 import ProtectedRoute from "./shared/ProtectedRoute";
 import ListeCommandes from "./backoffice/pages/ListeCommandes";
-
+import Panier from "./frontoffice/pages/Panier";
+import Commande from "./frontoffice/pages/Commande";
+import Commandes from "./frontoffice/pages/Commandes";
+import LoginFO from "./frontoffice/pages/LoginFO";
+import ProtectedRouteFO from "./shared/ProtectedRouteFO";
 function App() {
   return (
     <Routes>
@@ -38,8 +42,33 @@ function App() {
           </ProtectedRoute>
         }
       />
+      <Route path="/frontoffice/login" element={<LoginFO />} />
       <Route path="/frontoffice/produits" element={<ListeProduits />} />
       <Route path="/frontoffice/produits/:id" element={<Produit />} />
+      <Route
+        path="/frontoffice/panier"
+        element={
+          <ProtectedRouteFO>
+            <Panier />
+          </ProtectedRouteFO>
+        }
+      />
+      <Route
+        path="/frontoffice/commande"
+        element={
+          <ProtectedRouteFO>
+            <Commande />
+          </ProtectedRouteFO>
+        }
+      />
+      <Route
+        path="/frontoffice/commandes"
+        element={
+          <ProtectedRouteFO>
+            <Commandes />
+          </ProtectedRouteFO>
+        }
+      />
     </Routes>
   );
 }

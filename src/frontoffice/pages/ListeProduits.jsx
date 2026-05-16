@@ -4,6 +4,7 @@ import {
   deleteProductById,
   fetchProductList,
 } from "../../services/productService";
+import { fetchTaxRate } from "../../services/taxService";
 
 const ListeProduits = () => {
   const [produits, setProduits] = useState([]);
@@ -31,9 +32,18 @@ const ListeProduits = () => {
   useEffect(() => {
     let isActive = true;
     fetchProductList()
-      .then((data) => {
+      .then(async (data) => {
         if (!isActive) return;
-        setProduits(data);
+        
+        const productsWithTaxes = await Promise.all(
+          data.map(async (p) => {
+            const rate = await fetchTaxRate(p.id_tax_rules_group);
+            p.prixTTC = (Number(p.prix) * (1 + rate / 100)).toFixed(2);
+            return p;
+          })
+        );
+
+        setProduits(productsWithTaxes);
         setLoading(false);
       })
       .catch((err) => {
@@ -63,7 +73,7 @@ const ListeProduits = () => {
             <h3>
               {produit.nom || "Sans nom"} (#{produit.id})
             </h3>
-            <p>Prix : {produit.prix} EUR</p>
+            <p>Prix : {produit.prixTTC} EUR TTC</p>
             <p>Reference : {produit.reference || "-"}</p>
             <p>Quantite : {produit.quantite}</p>
             {produit.image && (

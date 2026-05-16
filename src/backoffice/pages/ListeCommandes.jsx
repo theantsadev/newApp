@@ -3,9 +3,9 @@ import { Link } from "react-router-dom";
 import {
   deleteOrderById,
   fetchOrderList,
-  updateOrderState,
-  fetchAllOrderStates,
+  updateOrderState
 } from "../../services/orderService";
+import { fetchAllOrderStates } from "../../services/orderStateService";
 
 const ListeCommandes = () => {
   const [stateMap, setStateMap] = useState({});

@@ -1,28 +1,30 @@
 import { requestXml, patchXml, deleteOne, postXml } from "./prestashopClient";
-import { parseXmlDoc, getTextContent } from "../shared/xmlUtils";
+import { parseXmlToJson, getValue } from "../shared/xmlUtils";
 
-export const fetchAllOrderStates = async () => {
-  const xmlText = await requestXml("order_states?display=full");
-  const dom = parseXmlDoc(xmlText);
-  const map = {};
-  dom.querySelectorAll("order_state").forEach((node) => {
-    const id = getTextContent(node, "id");
-    const name = node.querySelector("name language")?.textContent?.trim() || "";
-    map[id] = name;
-  });
-  return map; // { "1": "En attente", "2": "Paiement accepté", ... }
-};
+const ressource = "orders";
+
+export const parseOrder = (order) => ({
+  id: getValue(order.id),
+  id_customer: getValue(order.id_customer),
+  current_state: getValue(order.current_state),
+  reference: getValue(order.reference),
+  payment: getValue(order.payment),
+  module: getValue(order.module),
+  total_paid: getValue(order.total_paid),
+  date_add: getValue(order.date_add),
+  date_upd: getValue(order.date_upd),
+});
 
 export const fetchOrderList = async () => {
-  const ordersXml = await requestXml("orders?display=full")
+  const xmlText = await requestXml(`${ressource}?display=full`);
+  const orders = parseXmlToJson(xmlText)?.prestashop?.orders?.order || [];
+  const response = [];
 
+  orders.forEach((order) => {
+    response.push(parseOrder(order));
+  });
 
-  const dom = parseXmlDoc(ordersXml);
-  // orderService.js
-  return Array.from(dom.querySelectorAll("order")).map((node) => ({
-    id: getTextContent(node, "id"),
-    etatId: getTextContent(node, "current_state"),
-  }));
+  return response;
 };
 
 export const updateOrderState = async (id, newStateId) => {
@@ -33,12 +35,16 @@ export const updateOrderState = async (id, newStateId) => {
     <current_state>${Number(newStateId)}</current_state>
   </order>
 </prestashop>`;
-  return patchXml(`orders/${id}`, xmlText);
+  return patchXml(`${ressource}/${id}`, xmlText);
 };
 
-export const fetchOrderById = async (id) => requestXml(`orders/${id}`);
+export const fetchOrderById = async (id) => {
+  const xmlText = await requestXml(`${ressource}/${id}`);
+  const order = parseXmlToJson(xmlText)?.prestashop?.order;
+  return parseOrder(order);
+};
 
-export const deleteOrderById = async (id) => deleteOne("orders", id);
+export const deleteOrderById = async (id) => deleteOne(ressource, id);
 
 export const createOrderFromXml = async (xmlText) =>
-  postXml("orders", xmlText);
+  postXml(ressource, xmlText);
