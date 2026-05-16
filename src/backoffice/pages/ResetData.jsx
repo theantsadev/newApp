@@ -1,5 +1,9 @@
 import { useState } from "react";
-import { deleteOne, getAllIds, requestXml } from "../../services/prestashopClient";
+import {
+  deleteOne,
+  getAllIds,
+  requestXml,
+} from "../../services/prestashopClient";
 import { parseXmlDoc } from "../../shared/xmlUtils";
 
 const RESET_RESOURCES = [
@@ -177,9 +181,7 @@ const ResetData = () => {
 
             rapportFinal[resource.key].succes++;
           } catch (err) {
-            rapportFinal[resource.key].erreurs.push(
-              `${id} : ${err.message}`,
-            );
+            rapportFinal[resource.key].erreurs.push(`${id} : ${err.message}`);
           }
 
           setProgression((prev) => ({
@@ -259,9 +261,7 @@ const ResetData = () => {
               <strong>{item.label}</strong>
               <div>Supprimes : {item.succes}</div>
               {item.erreurs.length > 0 && (
-                <div style={{ color: "red" }}>
-                  {item.erreurs.join(", ")}
-                </div>
+                <div style={{ color: "red" }}>{item.erreurs.join(", ")}</div>
               )}
             </div>
           ))}

@@ -151,7 +151,7 @@ GET {{webservice_url}}/api/products?filter[reference]=[T_01]&display=[id]
 Authorization: Basic {{webservice_basic_auth}}
 ### => id_product_T01 = 20
 
-@id_product_T01 = 20
+@id_product_T01 = 72
 
 ###
 
@@ -228,6 +228,11 @@ Content-Type: application/xml
   </cart>
 </prestashop>
 ### => id_cart_1 = 6
+
+DELETE  {{webservice_url}}/api/carts/48
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
 
 @id_cart_1 = 6
 
