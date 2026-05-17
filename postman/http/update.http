@@ -1,0 +1,42 @@
+@webservice_url = http://localhost:70/prestashop
+@webservice_basic_auth = SFRXV1pBUUdTOTFMUUsyTkE2N0RCUzRMWjVFR1JORms6
+
+@id_panier = 89
+PATCH  {{webservice_url}}/api/carts/{{id_panier}}
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <cart>
+    <id><![CDATA[{{id_panier}}]]></id>
+    <date_add><![CDATA[2026-05-09 00:00:00]]></date_add>
+  </cart>
+</prestashop>
+
+###
+@id_payment = 104
+PATCH  {{webservice_url}}/api/order_payments/{{id_payment}}
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <order_payment>
+    <id><![CDATA[{{id_payment}}]]></id>
+    <date_add><![CDATA[2026-05-09 00:00:00]]></date_add>
+  </order_payment>
+</prestashop>
+
+### 
+PATCH  {{webservice_url}}/api/order_histories/129
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <order_history>
+    <id><![CDATA[129]]></id>
+    <date_add><![CDATA[2026-04-16 00:00:00]]></date_add>
+  </order_history>
+</prestashop>
