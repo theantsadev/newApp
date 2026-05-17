@@ -128,6 +128,8 @@ const Produit = () => {
         quantity,
         nom: produit.nom,
         prix: prixAffiche,
+        prixHT: prixHT,
+        taxRate: taxRate,
         reference: referenceAffichee,
       });
     }

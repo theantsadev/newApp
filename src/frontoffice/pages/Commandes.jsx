@@ -14,14 +14,16 @@ const Commandes = () => {
 
   useEffect(() => {
     const storedCustomer = getStoredCustomer();
-    console.log(storedCustomer);
     if (!storedCustomer) {
       navigate("/frontoffice/login");
       return;
     }
     setCustomer(storedCustomer);
-    console.log(customer);
     
+    if (storedCustomer.isAnonymous) {
+      setLoading(false);
+      return;
+    }
 
     Promise.all([fetchOrderList(), fetchOrderStateList()])
       .then(([orderList, stateList]) => {
@@ -30,17 +32,16 @@ const Commandes = () => {
           (o) => Number(o.id_customer) === Number(storedCustomer.id)
         );
 
-
         // Trier du plus récent au plus ancien
         myOrders.sort((a, b) => new Date(b.date_add) - new Date(a.date_add));
 
         setOrders(myOrders);
 
-        const statesMap = {};
+        const stylesMap = {};
         stateList.forEach((s) => {
-          statesMap[s.id] = s.name;
+          stylesMap[s.id] = s.name;
         });
-        setStates(statesMap);
+        setStates(stylesMap);
 
         setLoading(false);
       })
@@ -48,14 +49,27 @@ const Commandes = () => {
         setError(err);
         setLoading(false);
       });
-  }, []);
+  }, [navigate]);
+
+  if (customer?.isAnonymous) {
+    return (
+      <div style={{ padding: "2rem", border: "1px solid var(--border)", borderRadius: "12px", background: "var(--code-bg)", textAlign: "center", margin: "2rem auto", maxWidth: "600px" }}>
+        <h2 style={{ color: "var(--accent)", marginTop: 0 }}>📋 Mes Commandes</h2>
+        <p style={{ margin: "1rem 0", color: "var(--text-h)" }}>Vous êtes actuellement connecté en mode <strong>Anonyme</strong>.</p>
+        <p style={{ margin: "1rem 0", color: "var(--text)" }}>Les utilisateurs anonymes n'ont pas d'historique de commandes.</p>
+        <button onClick={() => navigate("/")} style={{ background: "var(--accent)", color: "#fff", border: "none", padding: "10px 20px", borderRadius: "8px", fontWeight: "600", cursor: "pointer", marginTop: "1rem" }}>
+          Choisir un compte client
+        </button>
+      </div>
+    );
+  }
 
   if (loading) return <div>Chargement de vos commandes...</div>;
   if (error) return <div>Erreur : {error.message}</div>;
 
   const handleLogout = () => {
     clearStoredCustomer();
-    navigate("/frontoffice/login");
+    navigate("/");
   };
 
   return (
