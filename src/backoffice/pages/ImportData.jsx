@@ -2,7 +2,7 @@ import { useState } from "react";
 import Papa from "papaparse";
 import JSZip from "jszip";
 import { getAuthHeader } from "../../config/prestashop";
-import { requestXml, postXml } from "../../services/prestashopClient";
+import { requestXml, postXml, patchXml } from "../../services/prestashopClient";
 import { getTextContent, parseXmlDoc } from "../../shared/xmlUtils";
 
 const REQUIRED_HEADERS = {
@@ -70,7 +70,7 @@ const normalizeText = (value) =>
     .trim();
 
 const getTaxConfig = (rate) => {
-  const key = Number(rate).toFixed(2);
+  const key = Number(rate).toFixed(4);
   return (
     TAX_CONFIG[key] || {
       taxName: `TVA ${key}%`,
@@ -333,8 +333,8 @@ const ImportData = () => {
     <state><![CDATA[1]]></state>
     <show_price><![CDATA[1]]></show_price>
     <reference><![CDATA[${product.reference}]]></reference>
-    <price><![CDATA[${product.priceHt.toFixed(2)}]]></price>
-    <wholesale_price><![CDATA[${product.wholesaleHt.toFixed(2)}]]></wholesale_price>
+    <price><![CDATA[${product.priceHt.toFixed(4)}]]></price>
+    <wholesale_price><![CDATA[${product.wholesaleHt.toFixed(4)}]]></wholesale_price>
     <available_date><![CDATA[${product.availableDate}]]></available_date>
     <active><![CDATA[1]]></active>
     <available_for_order><![CDATA[1]]></available_for_order>
@@ -426,7 +426,7 @@ const ImportData = () => {
   <combination>
     <id_product><![CDATA[${productId}]]></id_product>
     <reference><![CDATA[${reference}]]></reference>
-    <price><![CDATA[${price.toFixed(2)}]]></price>
+    <price><![CDATA[${price.toFixed(4)}]]></price>
     <minimal_quantity><![CDATA[1]]></minimal_quantity>
     <default_on><![CDATA[0]]></default_on>
     <associations>
@@ -599,6 +599,54 @@ const ImportData = () => {
     return postXml("carts", xml);
   };
 
+  const updateCartDate = async (id, date) => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <cart>
+    <id><![CDATA[${id}]]></id>
+    <date_add><![CDATA[${date} 00:00:00]]></date_add>
+  </cart>
+</prestashop>`;
+
+    return patchXml("carts", xml);
+  };
+
+  const updateOrderDate = async (id, date) => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <order>
+    <id><![CDATA[${id}]]></id>
+    <date_add><![CDATA[${date} 00:00:00]]></date_add>
+  </order>
+</prestashop>`;
+
+    return patchXml("orders", xml);
+  };
+
+  const updateOrderHistoryDate = async (id, date) => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <order_history>
+    <id><![CDATA[${id}]]></id>
+    <date_add><![CDATA[${date} 00:00:00]]></date_add>
+  </order_history>
+</prestashop>`;
+
+    return patchXml("order_histories", xml);
+  };
+
+  const updatePaymentDate = async (id, date) => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <order_payment>
+    <id><![CDATA[${id}]]></id>
+    <date_add><![CDATA[${date} 00:00:00]]></date_add>
+  </order_payment>
+</prestashop>`;
+
+    return patchXml("order_payments", xml);
+  };
+
   const createOrder = async (row, cartId, customerId, addressId, items) => {
     const stateMap = {
       "en attente paiement a la livraison": {
@@ -610,8 +658,8 @@ const ImportData = () => {
       },
       "paiement accepte": {
         stateId: 2,
-        module: "ps_checkpayment",
-        payment: "Paiement par cheque",
+        module: "ps_cashondelivery",
+        payment: "Paiement comptant a la livraison (Cash on delivery)",
         valid: 1,
         paidReal: "TOTAL",
       },
@@ -622,9 +670,24 @@ const ImportData = () => {
         valid: 0,
         paidReal: 0,
       },
+      "paiement effectue": {
+        stateId: 2,
+        module: "ps_cashondelivery",
+        payment: "Paiement comptant a la livraison (Cash on delivery)",
+        valid: 1,
+        paidReal: "TOTAL",
+      },
+      annule: {
+        stateId: 6,
+        module: "ps_cashondelivery",
+        payment: "Paiement comptant a la livraison (Cash on delivery)",
+        valid: 0,
+        paidReal: 0,
+      },
     };
 
     const normalizedEtat = normalizeText(row.etat);
+
     const stateConfig = stateMap[normalizedEtat];
     if (!stateConfig) {
       throw new Error(`Etat commande inconnu: ${row.etat}`);
@@ -648,14 +711,14 @@ const ImportData = () => {
           <product_quantity><![CDATA[${item.quantity}]]></product_quantity>
           <product_name><![CDATA[${item.label}]]></product_name>
           <product_reference><![CDATA[${item.reference}]]></product_reference>
-          <product_price><![CDATA[${item.unitPriceHt.toFixed(2)}]]></product_price>
-          <unit_price_tax_incl><![CDATA[${item.unitPriceTtc.toFixed(2)}]]></unit_price_tax_incl>
-          <unit_price_tax_excl><![CDATA[${item.unitPriceHt.toFixed(2)}]]></unit_price_tax_excl>
+          <product_price><![CDATA[${item.unitPriceHt.toFixed(4)}]]></product_price>
+          <unit_price_tax_incl><![CDATA[${item.unitPriceTtc.toFixed(4)}]]></unit_price_tax_incl>
+          <unit_price_tax_excl><![CDATA[${item.unitPriceHt.toFixed(4)}]]></unit_price_tax_excl>
         </order_row>`,
       )
       .join("");
 
-    const totalPaid = totals.totalTtc.toFixed(2);
+    const totalPaid = totals.totalTtc.toFixed(4);
     const totalPaidReal =
       stateConfig.paidReal === "TOTAL" ? totalPaid : stateConfig.paidReal;
 
@@ -669,15 +732,15 @@ const ImportData = () => {
     <id_lang><![CDATA[1]]></id_lang>
     <id_customer><![CDATA[${customerId}]]></id_customer>
     <id_carrier><![CDATA[1]]></id_carrier>
+    <current_state><![CDATA[${stateConfig.stateId}]]></current_state>
     <module><![CDATA[${stateConfig.module}]]></module>
     <payment><![CDATA[${stateConfig.payment}]]></payment>
-    <date_add><![CDATA[${toIsoDate(row.date)} 00:00:00]]></date_add>
     <valid><![CDATA[${stateConfig.valid}]]></valid>
     <total_paid><![CDATA[${totalPaid}]]></total_paid>
     <total_paid_tax_incl><![CDATA[${totalPaid}]]></total_paid_tax_incl>
-    <total_paid_tax_excl><![CDATA[${totals.totalHt.toFixed(2)}]]></total_paid_tax_excl>
+    <total_paid_tax_excl><![CDATA[${totals.totalHt.toFixed(4)}]]></total_paid_tax_excl>
     <total_paid_real><![CDATA[${totalPaidReal}]]></total_paid_real>
-    <total_products><![CDATA[${totals.totalHt.toFixed(2)}]]></total_products>
+    <total_products><![CDATA[${totals.totalHt.toFixed(4)}]]></total_products>
     <total_products_wt><![CDATA[${totalPaid}]]></total_products_wt>
     <total_shipping><![CDATA[0]]></total_shipping>
     <total_shipping_tax_incl><![CDATA[0]]></total_shipping_tax_incl>
@@ -707,38 +770,8 @@ const ImportData = () => {
 
     const dom = parseXmlDoc(responseText);
     const orderId = getTextContent(dom, "order > id");
-    const reference = getTextContent(dom, "order > reference");
 
-    return { orderId, reference, stateId: stateConfig.stateId, totalPaid };
-  };
-
-  const createOrderHistory = async (orderId, stateId) => {
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
-  <order_history>
-    <id_order><![CDATA[${orderId}]]></id_order>
-    <id_order_state><![CDATA[${stateId}]]></id_order_state>
-    <id_employee><![CDATA[1]]></id_employee>
-  </order_history>
-</prestashop>`;
-
-    await postXml("order_histories", xml);
-  };
-
-  const createOrderPayment = async (reference, amount) => {
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
-  <order_payment>
-    <order_reference><![CDATA[${reference}]]></order_reference>
-    <id_currency><![CDATA[1]]></id_currency>
-    <amount><![CDATA[${amount}]]></amount>
-    <payment_method><![CDATA[Paiement par cheque]]></payment_method>
-    <conversion_rate><![CDATA[1.000000]]></conversion_rate>
-    <date_add><![CDATA[${new Date().toISOString().slice(0, 19).replace("T", " ")}]]></date_add>
-  </order_payment>
-</prestashop>`;
-
-    await postXml("order_payments", xml);
+    return { orderId, stateId: stateConfig.stateId, totalPaid };
   };
 
   const handleImport = async () => {
@@ -916,7 +949,8 @@ const ImportData = () => {
         const items = achatItems.map((item) => {
           const product = productsByRef[item.reference];
           const basePriceHt = calcPriceHt(product.priceTtc, product.taxRate);
-          let supplement = 0;
+          let unitPriceTtc = product.priceTtc;
+          let unitPriceHt = basePriceHt;
           let attributeId = 0;
           let label = product.name;
           let ref = item.reference;
@@ -929,21 +963,16 @@ const ImportData = () => {
                 d.reference === item.reference && d.karazany === item.variant,
             );
             if (declRow) {
-              const variantPriceHt = calcPriceHt(
-                toNumber(declRow.prix_vente_ttc) || product.priceTtc,
-                product.taxRate,
-              );
-              supplement = variantPriceHt - basePriceHt;
+              unitPriceTtc =
+                toNumber(declRow.prix_vente_ttc) || product.priceTtc;
+              unitPriceHt = calcPriceHt(unitPriceTtc, product.taxRate);
             }
             label = `${product.name} (variante : ${item.variant})`;
             ref = `${item.reference}-${item.variant}`;
           }
 
-          const unitPriceHt =
-            Math.round((basePriceHt + supplement) * 100) / 100;
-          const unitPriceTtc =
-            Math.round(unitPriceHt * (1 + toPercent(product.taxRate)) * 100) /
-            100;
+          unitPriceHt = Math.round(unitPriceHt * 100) / 100;
+          unitPriceTtc = Math.round(unitPriceTtc * 100) / 100;
 
           return {
             productId: productIds[item.reference],
@@ -956,18 +985,46 @@ const ImportData = () => {
           };
         });
 
+        const date = toIsoDate(row.date);
         const cartId = await createCart(customerId, addressId, items);
-        const order = await createOrder(
-          row,
-          cartId,
-          customerId,
-          addressId,
-          items,
-        );
-        await createOrderHistory(order.orderId, order.stateId);
-        if (order.stateId === 2) {
-          await createOrderPayment(order.reference, order.totalPaid);
+
+        await updateCartDate(cartId, date);
+
+        const normalizedEtat = row.etat ? normalizeText(row.etat) : "";
+        if (normalizedEtat && normalizedEtat !== "dans le panier") {
+          console.log("Date de commande : " + toIsoDate(row.date));
+          const order = await createOrder(
+            row,
+            cartId,
+            customerId,
+            addressId,
+            items,
+          );
+          const reference = await requestXml(
+            `orders/${order.orderId}?display=[reference]`,
+          ).then((text) => {
+            const dom = parseXmlDoc(text);
+            return getTextContent(dom, "order > reference");
+          });
+          console.log("Reference de commande : " + reference);
+          const orderPaymentId = await fetchIdByFilter(
+            "order_payments",
+            "order_payment",
+            "order_reference",
+            reference,
+          );
+          await updateOrderDate(order.orderId, date);
+          if (orderPaymentId) {
+            await updatePaymentDate(orderPaymentId, date);
+          } else {
+            appendLog(
+              `Aucun paiement trouve pour la commande ${order.reference}`,
+            );
+          }
         }
+
+        // order_history et order_payment sont gérés automatiquement par PrestaShop
+        // grâce à l'ajout de <current_state> et <total_paid_real> lors du POST.
       }
 
       appendLog("Import termine.");

@@ -38,7 +38,7 @@ const ListeCommandes = () => {
       setSuccess("etat de commande mise à jour avec succes");
       setCommandes((prev) =>
         prev.map((c) =>
-          c.id === commande.id ? { ...c, etatId: e.target.value } : c,
+          c.id === commande.id ? { ...c, current_state: e.target.value } : c,
         ),
       );
     } catch (err) {
@@ -98,7 +98,7 @@ const ListeCommandes = () => {
               <td>
                 {/* ✅ select avec toutes les options depuis stateMap */}
                 <select
-                  defaultValue={commande.etatId || ""}
+                  defaultValue={commande.current_state || ""}
                   onChange={(e) => handleSelectChange(e, commande)}
                 >
                   {Object.entries(stateMap).map(([id, name]) => (

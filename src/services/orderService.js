@@ -11,6 +11,7 @@ export const parseOrder = (order) => ({
   payment: getValue(order.payment),
   module: getValue(order.module),
   total_paid: getValue(order.total_paid),
+  total_paid_tax_excl: getValue(order.total_paid_tax_excl),
   date_add: getValue(order.date_add),
   date_upd: getValue(order.date_upd),
 });
