@@ -4,7 +4,7 @@ const ressource = "products";
 
 export const parseProduct = (product) => {
     const image = product.associations?.images?.image;
-     const optionValues =
+    const optionValues =
         product.associations?.product_option_values?.product_option_value;
     const optionValuesList = Array.isArray(optionValues)
         ? optionValues
@@ -17,6 +17,7 @@ export const parseProduct = (product) => {
         id: getValue(product.id),
         id_tax_rules_group: getValue(product.id_tax_rules_group),
         id_declinaison: getValue(product.id_default_combination),
+        date_disponibilite: getValue(product.available_date),
         prix: getValue(product.price),
         reference: getValue(product.reference),
         quantite: getValue(product.quantity),
@@ -32,6 +33,30 @@ export const parseProduct = (product) => {
         option_value_ids: optionValuesList.map((optionValue) => Number(getValue(optionValue.id))),
     };
 }
+
+export const getMarque = (date_disponibilite) => {
+    if (!date_disponibilite || date_disponibilite === "0000-00-00") return null;
+    
+    try {
+        const now = new Date();
+        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+        const today = new Date(todayStr + "T00:00:00");
+        
+        const dispo = new Date(date_disponibilite.split(" ")[0] + "T00:00:00");
+        
+        if (isNaN(today.getTime()) || isNaN(dispo.getTime())) return null;
+        
+        const diffTime = today.getTime() - dispo.getTime();
+        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+        
+        if (diffDays === 1) return "HOT";
+        if (diffDays === 7) return "NEW";
+    } catch (e) {
+        console.error("Erreur calcul marque:", e);
+    }
+    return null;
+}
+
 
 export const fetchProductList = async () => {
     const xmlText = await requestXml(`${ressource}?display=full`);
