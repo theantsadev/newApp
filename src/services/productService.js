@@ -1,5 +1,6 @@
-import { requestXml, deleteOne, postXml } from "./prestashopClient";
-import { parseXmlToJson, getValue } from "../shared/xmlUtils";
+import { requestXml, deleteOne, postXml, fetchIdByFilter } from "./prestashopClient";
+import { parseXmlToJson, getValue, buildLangXml, slugify } from "../shared/xmlUtils";
+import { getAuthHeader } from "../config/prestashop";
 const ressource = "products";
 
 export const parseProduct = (product) => {
@@ -15,6 +16,8 @@ export const parseProduct = (product) => {
     const imageNode = Array.isArray(image) ? image[0] : image;
     return {
         id: getValue(product.id),
+        id_category_default: getValue(product.id_category_default),
+        prix_achat: getValue(product.wholesale_price),
         id_tax_rules_group: getValue(product.id_tax_rules_group),
         id_declinaison: getValue(product.id_default_combination),
         date_disponibilite: getValue(product.available_date),
@@ -79,3 +82,78 @@ export const deleteProductById = async (id) => deleteOne(ressource, id);
 
 export const createProductFromXml = async (xmlText) =>
     postXml(ressource, xmlText);
+
+export const ensureProduct = async (
+  product,
+  taxRuleGroupId,
+  categoryId,
+  type,
+  languageIds,
+) => {
+  let id = await fetchIdByFilter(
+    ressource,
+    "product",
+    "reference",
+    product.reference,
+  );
+  if (id) return id;
+
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <product>
+    <id_category_default><![CDATA[${categoryId}]]></id_category_default>
+    <id_tax_rules_group><![CDATA[${taxRuleGroupId}]]></id_tax_rules_group>
+    <id_shop_default><![CDATA[1]]></id_shop_default>
+    <state><![CDATA[1]]></state>
+    <show_price><![CDATA[1]]></show_price>
+    <reference><![CDATA[${product.reference}]]></reference>
+    <price><![CDATA[${product.priceHt.toFixed(4)}]]></price>
+    <wholesale_price><![CDATA[${product.wholesaleHt.toFixed(4)}]]></wholesale_price>
+    <available_date><![CDATA[${product.availableDate}]]></available_date>
+    <active><![CDATA[1]]></active>
+    <available_for_order><![CDATA[1]]></available_for_order>
+    <product_type><![CDATA[${type}]]></product_type>
+    <name>
+      ${buildLangXml(languageIds, product.name)}
+    </name>
+    <description>
+      ${buildLangXml(languageIds, product.name)}
+    </description>
+    <description_short>
+      ${buildLangXml(languageIds, product.name)}
+    </description_short>
+    <link_rewrite>
+      ${buildLangXml(languageIds, slugify(product.name))}
+    </link_rewrite>
+    <associations>
+      <categories>
+        <category><id><![CDATA[${categoryId}]]></id></category>
+      </categories>
+    </associations>
+  </product>
+</prestashop>`;
+
+  id = await postXml(ressource, xml);
+  return id;
+};
+
+export const uploadProductImage = async (productId, file) => {
+  const formData = new FormData();
+  formData.append("image", file, file.name);
+
+  const resp = await fetch(
+    `/prestashop-api/api/images/products/${productId}`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: getAuthHeader(),
+      },
+      body: formData,
+    },
+  );
+
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(text || `HTTP ${resp.status}`);
+  }
+};

@@ -1,5 +1,6 @@
-import { requestXml, deleteOne, postXml } from "./prestashopClient";
+import { requestXml, deleteOne, postXml, patchXml } from "./prestashopClient";
 import { parseXmlToJson, getValue } from "../shared/xmlUtils";
+import { fetchOrderList } from "./orderService";
 
 const CART_KEY = "prestashop_cart_key";
 const ressource = "carts";
@@ -64,6 +65,17 @@ export const fetchCartList = async () => {
     return response;
 };
 
+export const fetchUnlinkedCartList = async () => {
+    const [cartList, orderList] = await Promise.all([
+        fetchCartList(),
+        fetchOrderList(),
+    ]);
+    const linkedCartIds = new Set(
+        orderList.map((order) => String(order.id_cart)).filter(Boolean),
+    );
+    return cartList.filter((cart) => !linkedCartIds.has(String(cart.id)));
+};
+
 export const fetchCartById = async (id) => {
     const xmlText = await requestXml(`${ressource}/${id}`);
     const cart = parseXmlToJson(xmlText)?.prestashop?.cart;
@@ -73,3 +85,55 @@ export const fetchCartById = async (id) => {
 export const deleteCartById = async (id) => deleteOne(ressource, id);
 
 export const createCartFromXml = async (xmlText) => postXml(ressource, xmlText);
+
+export const createCart = async (customerId, addressId, items) => {
+  const rowsXml = items
+    .map(
+      (item) => `
+      <cart_row>
+        <id_product><![CDATA[${item.productId}]]></id_product>
+        <id_product_attribute><![CDATA[${item.attributeId}]]></id_product_attribute>
+        <id_address_delivery><![CDATA[${addressId}]]></id_address_delivery>
+        <id_customization><![CDATA[0]]></id_customization>
+        <quantity><![CDATA[${item.quantity}]]></quantity>
+      </cart_row>`,
+    )
+    .join("");
+
+  const deliveryOption = `{"${addressId}":"1,"}`;
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <cart>
+    <id_address_delivery><![CDATA[${addressId}]]></id_address_delivery>
+    <id_address_invoice><![CDATA[${addressId}]]></id_address_invoice>
+    <id_currency><![CDATA[1]]></id_currency>
+    <id_customer><![CDATA[${customerId}]]></id_customer>
+    <id_lang><![CDATA[1]]></id_lang>
+    <id_shop><![CDATA[1]]></id_shop>
+    <id_shop_group><![CDATA[1]]></id_shop_group>
+    <id_carrier><![CDATA[1]]></id_carrier>
+    <delivery_option><![CDATA[${deliveryOption}]]></delivery_option>
+    <recyclable><![CDATA[0]]></recyclable>
+    <gift><![CDATA[0]]></gift>
+    <associations>
+      <cart_rows>
+        ${rowsXml}
+      </cart_rows>
+    </associations>
+  </cart>
+</prestashop>`;
+
+  return postXml(ressource, xml);
+};
+
+export const updateCartDate = async (id, date) => {
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <cart>
+    <id><![CDATA[${id}]]></id>
+    <date_add><![CDATA[${date} 00:00:00]]></date_add>
+  </cart>
+</prestashop>`;
+
+  return patchXml(ressource, xml);
+};

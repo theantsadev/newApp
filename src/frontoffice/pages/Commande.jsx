@@ -3,11 +3,10 @@ import { useNavigate } from "react-router-dom";
 import {
   getStoredCart,
   clearStoredCart,
-  createCartFromXml,
 } from "../../services/cartService";
-import { createOrderFromXml } from "../../services/orderService";
 import { getStoredCustomer } from "../../shared/customerAuthStorage";
 import { fetchAddressesByCustomerId } from "../../services/addressService";
+import { processOrderCreation } from "../../services/checkoutService";
 
 const Commande = () => {
   const [cart, setCart] = useState([]);
@@ -69,72 +68,16 @@ const Commande = () => {
       if (customer.isAnonymous) throw new Error("Les commandes ne sont pas autorisées pour les utilisateurs anonymes.");
       if (!address) throw new Error("Aucune adresse trouvée pour ce client.");
 
-      // 1. Créer le panier Prestashop
-      const cartRowsXml = cart
-        .map(
-          (item) => `
-        <cart_row>
-          <id_product>${item.id_product}</id_product>
-          <id_product_attribute>${item.id_product_attribute}</id_product_attribute>
-          <id_address_delivery>${address.id}</id_address_delivery>
-          <quantity>${item.quantity}</quantity>
-        </cart_row>
-      `,
-        )
-        .join("");
-
-      const cartXml = `<?xml version="1.0" encoding="UTF-8"?>
-<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
-  <cart>
-    <id_address_delivery>${address.id}</id_address_delivery>
-    <id_address_invoice>${address.id}</id_address_invoice>
-    <id_currency>1</id_currency>
-    <id_lang>1</id_lang>
-    <id_customer>${customer.id}</id_customer>
-    <associations>
-      <cart_rows>
-        ${cartRowsXml}
-      </cart_rows>
-    </associations>
-  </cart>
-</prestashop>`;
-
-      const cartId = await createCartFromXml(cartXml);
-      if (!cartId || cartId === "?") {
-        throw new Error("Erreur lors de la création du panier Prestashop.");
-      }
-
-      // 2. Créer la commande Prestashop
-      const orderXml = `<?xml version="1.0" encoding="UTF-8"?>
-<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
-  <order>
-    <id_address_delivery>${address.id}</id_address_delivery>
-    <id_address_invoice>${address.id}</id_address_invoice>
-    <id_cart>${cartId}</id_cart>
-    <id_currency>1</id_currency>
-    <id_lang>1</id_lang>
-    <id_customer>${customer.id}</id_customer>
-    <id_carrier>1</id_carrier>
-    <module>ps_cashondelivery</module>
-    <payment>Paiement à la livraison</payment>
-    <total_paid>${totalPrix}</total_paid>
-    <total_paid_real>${totalPrix}</total_paid_real>
-    <total_products>${totalPrix}</total_products>
-    <total_products_wt>${totalPrix}</total_products_wt>
-    <conversion_rate>1</conversion_rate>
-  </order>
-</prestashop>`;
-
-      const orderId = await createOrderFromXml(orderXml);
-      if (!orderId || orderId === "?") {
-        throw new Error(
-          "Erreur lors de la création de la commande Prestashop.",
-        );
-      }
+      const result = await processOrderCreation({
+        customer,
+        addressId: address.id,
+        cartItems: cart,
+        existingCartId: null,
+      });
 
       // 3. Succès
       clearStoredCart();
-      alert("Commande validée avec succès ! (ID: " + orderId + ")");
+      alert("Commande validée avec succès ! (ID: " + result.orderId + ")");
       navigate("/frontoffice/commandes");
     } catch (err) {
       setError(err.message);

@@ -1,89 +1,8 @@
 import { useState } from "react";
 import {
-  deleteOne,
-  getAllIds,
-  requestXml,
-} from "../../services/prestashopClient";
-import { parseXmlDoc } from "../../shared/xmlUtils";
-
-const RESET_RESOURCES = [
-  {
-    key: "order_histories",
-    label: "Historique commandes",
-    endpoint: "order_histories",
-    tag: "order_history",
-  },
-  {
-    key: "order_payments",
-    label: "Paiements commandes",
-    endpoint: "order_payments",
-    tag: "order_payment",
-  },
-  { key: "orders", label: "Commandes", endpoint: "orders", tag: "order" },
-  { key: "carts", label: "Paniers", endpoint: "carts", tag: "cart" },
-  {
-    key: "addresses",
-    label: "Adresses",
-    endpoint: "addresses",
-    tag: "address",
-  },
-  {
-    key: "customers",
-    label: "Clients",
-    endpoint: "customers",
-    tag: "customer",
-  },
-  {
-    key: "stock_availables",
-    label: "Stocks",
-    endpoint: "stock_availables",
-    tag: "stock_available",
-  },
-  {
-    key: "combinations",
-    label: "Declinaisons",
-    endpoint: "combinations",
-    tag: "combination",
-  },
-  {
-    key: "product_option_values",
-    label: "Valeurs options",
-    endpoint: "product_option_values",
-    tag: "product_option_value",
-  },
-  {
-    key: "product_options",
-    label: "Options",
-    endpoint: "product_options",
-    tag: "product_option",
-  },
-  {
-    key: "product_images",
-    label: "Images produits",
-    endpoint: "images/products",
-    tag: "product",
-  },
-  { key: "products", label: "Produits", endpoint: "products", tag: "product" },
-  {
-    key: "categories",
-    label: "Categories",
-    endpoint: "categories",
-    tag: "category",
-  },
-  {
-    key: "tax_rules",
-    label: "Regles de taxes",
-    endpoint: "tax_rules",
-    tag: "tax_rule",
-  },
-  {
-    key: "tax_rule_groups",
-    label: "Groupes de taxes",
-    endpoint: "tax_rule_groups",
-    tag: "tax_rule_group",
-  },
-  { key: "taxes", label: "Taxes", endpoint: "taxes", tag: "tax" },
-];
+  RESET_RESOURCES,
+  resetResources,
+} from "../../services/resetService";
 
 const ResetData = () => {
   const [selection, setSelection] = useState(
@@ -118,157 +37,304 @@ const ResetData = () => {
 
     if (!confirmed) return;
 
-    const orderedSelection = RESET_RESOURCES.filter((resource) =>
-      selection.includes(resource.key),
-    );
-
     setEnCours(true);
     setProgression({});
 
-    const rapportFinal = {};
-
-    for (const resource of orderedSelection) {
-      rapportFinal[resource.key] = {
-        label: resource.label,
-        succes: 0,
-        erreurs: [],
-      };
-
-      try {
-        const ids =
-          resource.key === "product_images"
-            ? await getAllIds("products", resource.tag)
-            : await getAllIds(resource.endpoint, resource.tag);
-
-        if (ids.length === 0) {
-          setProgression((prev) => ({ ...prev, [resource.key]: 100 }));
-          continue;
-        }
-
-        for (const [index, id] of ids.entries()) {
-          try {
-            if (resource.key === "stock_availables") {
-              const xmlText = await requestXml(`stock_availables/${id}`);
-              const dom = parseXmlDoc(xmlText);
-              const stock = dom.querySelector("stock_available");
-              const productId = stock
-                ?.querySelector("id_product")
-                ?.textContent.trim();
-              const attributeId = stock
-                ?.querySelector("id_product_attribute")
-                ?.textContent.trim();
-
-              const updateXml = `<?xml version="1.0" encoding="UTF-8"?>
-<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
-  <stock_available>
-    <id><![CDATA[${id}]]></id>
-    <id_product><![CDATA[${productId}]]></id_product>
-    <id_product_attribute><![CDATA[${attributeId}]]></id_product_attribute>
-    <quantity><![CDATA[0]]></quantity>
-    <depends_on_stock><![CDATA[0]]></depends_on_stock>
-    <out_of_stock><![CDATA[1]]></out_of_stock>
-  </stock_available>
-</prestashop>`;
-
-              await requestXml(`stock_availables/${id}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/xml" },
-                body: updateXml,
-              });
-            } else {
-              await deleteOne(resource.endpoint, id);
-            }
-
-            rapportFinal[resource.key].succes++;
-          } catch (err) {
-            rapportFinal[resource.key].erreurs.push(`${id} : ${err.message}`);
-          }
-
-          setProgression((prev) => ({
-            ...prev,
-            [resource.key]: Math.round(((index + 1) / ids.length) * 100),
-          }));
-        }
-      } catch (err) {
-        rapportFinal[resource.key].erreurs.push(`GET : ${err.message}`);
-      }
-    }
+    const rapportFinal = await resetResources(selection, {
+      onProgress: (key, value) =>
+        setProgression((prev) => ({ ...prev, [key]: value })),
+    });
 
     setRapport(rapportFinal);
     setEnCours(false);
   };
 
   return (
-    <div>
-      <h1>Reset Data</h1>
-      <p>Cette page permet de reinitialiser les donnees PrestaShop.</p>
 
-      <div>
-        <button onClick={selectAll} disabled={enCours}>
-          Tout selectionner
-        </button>
-        <button onClick={clearAll} disabled={enCours}>
-          Tout deselectionner
-        </button>
+    <div style={styles.container}>
+      <div style={styles.headerSection}>
+        <h1 style={styles.title}>Réinitialisation des données</h1>
+        <p style={styles.subtitle}>Sélectionnez et supprimez en toute sécurité les ressources de votre boutique PrestaShop.</p>
       </div>
 
-      <table border={1}>
-        <thead>
-          <tr>
-            <th>Selection</th>
-            <th>Ordre</th>
-            <th>Ressource</th>
-            <th>Progression</th>
-          </tr>
-        </thead>
-        <tbody>
-          {RESET_RESOURCES.map((resource, index) => (
-            <tr key={resource.key}>
-              <td>
-                <input
-                  type="checkbox"
-                  checked={selection.includes(resource.key)}
-                  onChange={() => toggleSelection(resource.key)}
-                  disabled={enCours}
-                />
-              </td>
-              <td>{index + 1}</td>
-              <td>{resource.label}</td>
-              <td>
-                {progression[resource.key] !== undefined && (
-                  <span>{progression[resource.key]}%</span>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div style={styles.card}>
+        <div style={styles.actionBar}>
+          <button style={styles.btnSecondary} onClick={selectAll} disabled={enCours}>
+            Tout Sélectionner
+          </button>
+          <button style={styles.btnSecondary} onClick={clearAll} disabled={enCours}>
+            Tout Désélectionner
+          </button>
+        </div>
 
-      <br />
-      <button
-        onClick={handleReset}
-        disabled={selection.length === 0 || enCours}
-        style={{ color: "red" }}
-      >
-        {enCours ? "Reinitialisation en cours..." : "Reinitialiser"}
-      </button>
+        <div style={styles.tableWrapper}>
+          <table style={styles.table}>
+            <thead>
+              <tr>
+                <th style={styles.th}>Sélection</th>
+                <th style={styles.th}>Ordre</th>
+                <th style={styles.th}>Ressource</th>
+                <th style={styles.thRight}>Progression</th>
+              </tr>
+            </thead>
+            <tbody>
+              {RESET_RESOURCES.map((resource, index) => (
+                <tr key={resource.key} style={styles.tr}>
+                  <td style={styles.td}>
+                    <input
+                      type="checkbox"
+                      checked={selection.includes(resource.key)}
+                      onChange={() => toggleSelection(resource.key)}
+                      disabled={enCours}
+                      style={styles.checkbox}
+                    />
+                  </td>
+                  <td style={styles.td}>{index + 1}</td>
+                  <td style={{ ...styles.td, fontWeight: "600", color: "#1e293b" }}>{resource.label}</td>
+                  <td style={styles.tdRight}>
+                    {progression[resource.key] !== undefined ? (
+                      <span style={{
+                        ...styles.progressionBadge,
+                        color: progression[resource.key] === 100 ? "#10b981" : "#3b82f6",
+                        backgroundColor: progression[resource.key] === 100 ? "#ecfdf5" : "#eff6ff",
+                      }}>
+                        {progression[resource.key]}%
+                      </span>
+                    ) : (
+                      <span style={{ color: "#94a3b8" }}>—</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div style={styles.actionSection}>
+          <button
+            onClick={handleReset}
+            disabled={selection.length === 0 || enCours}
+            style={{
+              ...styles.btnDanger,
+              ...((selection.length === 0 || enCours) ? styles.btnDangerDisabled : {})
+            }}
+          >
+            {enCours ? (
+              <>
+                <span style={styles.spinnerSmall}></span>
+                Réinitialisation en cours...
+              </>
+            ) : (
+              <>
+                <span>🔥</span> Réinitialiser la sélection
+              </>
+            )}
+          </button>
+        </div>
+      </div>
 
       {rapport && (
-        <div>
-          <h3>Rapport de reinitialisation</h3>
-          {Object.values(rapport).map((item) => (
-            <div key={item.label}>
-              <strong>{item.label}</strong>
-              <div>Supprimes : {item.succes}</div>
-              {item.erreurs.length > 0 && (
-                <div style={{ color: "red" }}>{item.erreurs.join(", ")}</div>
-              )}
-            </div>
-          ))}
+        <div style={{ ...styles.card, marginTop: "2rem", borderLeft: "5px solid #10b981" }}>
+          <h3 style={styles.cardTitle}>✨ Rapport de Réinitialisation</h3>
+          <div style={styles.reportGrid}>
+            {Object.values(rapport).map((item) => (
+              <div key={item.label} style={styles.reportItem}>
+                <span style={styles.reportLabel}>{item.label}</span>
+                <span style={styles.reportCount}>Supprimés : <strong>{item.succes}</strong></span>
+                {item.erreurs.length > 0 && (
+                  <div style={styles.reportErrors}>
+                    {item.erreurs.join(", ")}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
   );
+};
+
+const styles = {
+  container: {
+    padding: "2.5rem",
+    fontFamily: "'Outfit', 'Inter', sans-serif",
+    maxWidth: "800px",
+    margin: "0 auto",
+    color: "#1e293b",
+  },
+  headerSection: {
+    marginBottom: "2rem",
+    textAlign: "left",
+  },
+  title: {
+    fontSize: "2.2rem",
+    fontWeight: "700",
+    color: "#0f172a",
+    margin: "0 0 0.5rem 0",
+    letterSpacing: "-0.5px",
+  },
+  subtitle: {
+    fontSize: "1rem",
+    color: "#64748b",
+    margin: 0,
+  },
+  card: {
+    backgroundColor: "#ffffff",
+    borderRadius: "16px",
+    padding: "2rem",
+    boxShadow: "0 4px 20px rgba(0,0,0,0.04), 0 2px 6px rgba(0,0,0,0.02)",
+    border: "1px solid #e2e8f0",
+  },
+  cardTitle: {
+    fontSize: "1.25rem",
+    fontWeight: "700",
+    color: "#0f172a",
+    margin: "0 0 1.5rem 0",
+  },
+  actionBar: {
+    display: "flex",
+    gap: "0.75rem",
+    marginBottom: "1.5rem",
+  },
+  btnSecondary: {
+    padding: "0.5rem 1rem",
+    borderRadius: "8px",
+    border: "1px solid #cbd5e1",
+    backgroundColor: "#fff",
+    color: "#475569",
+    fontSize: "0.9rem",
+    fontWeight: "600",
+    cursor: "pointer",
+    transition: "all 0.2s ease",
+    "&:hover": {
+      backgroundColor: "#f8fafc",
+      borderColor: "#94a3b8",
+    }
+  },
+  btnDanger: {
+    padding: "0.85rem 1.75rem",
+    borderRadius: "10px",
+    border: "none",
+    backgroundColor: "#dc2626",
+    color: "#fff",
+    fontSize: "1rem",
+    fontWeight: "600",
+    cursor: "pointer",
+    transition: "all 0.2s ease",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.5rem",
+    boxShadow: "0 4px 12px rgba(220, 38, 38, 0.2)",
+  },
+  btnDangerDisabled: {
+    backgroundColor: "#e2e8f0",
+    color: "#94a3b8",
+    cursor: "not-allowed",
+    boxShadow: "none",
+    opacity: 0.6,
+  },
+  tableWrapper: {
+    borderRadius: "12px",
+    border: "1px solid #e2e8f0",
+    overflow: "hidden",
+    marginBottom: "2rem",
+  },
+  table: {
+    width: "100%",
+    borderCollapse: "collapse",
+    fontSize: "0.95rem",
+    textAlign: "left",
+  },
+  th: {
+    padding: "0.85rem 1.25rem",
+    backgroundColor: "#f8fafc",
+    color: "#475569",
+    fontWeight: "600",
+    borderBottom: "1px solid #e2e8f0",
+    fontSize: "0.8rem",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+  },
+  thRight: {
+    padding: "0.85rem 1.25rem",
+    backgroundColor: "#f8fafc",
+    color: "#475569",
+    fontWeight: "600",
+    borderBottom: "1px solid #e2e8f0",
+    fontSize: "0.8rem",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    textAlign: "right",
+  },
+  td: {
+    padding: "0.85rem 1.25rem",
+    borderBottom: "1px solid #f1f5f9",
+    color: "#64748b",
+  },
+  tdRight: {
+    padding: "0.85rem 1.25rem",
+    borderBottom: "1px solid #f1f5f9",
+    textAlign: "right",
+  },
+  tr: {
+    transition: "background-color 0.2s",
+    "&:hover": {
+      backgroundColor: "#f8fafc",
+    }
+  },
+  checkbox: {
+    width: "16px",
+    height: "16px",
+    borderRadius: "4px",
+    border: "1px solid #cbd5e1",
+    cursor: "pointer",
+  },
+  progressionBadge: {
+    padding: "0.25rem 0.5rem",
+    borderRadius: "6px",
+    fontSize: "0.8rem",
+    fontWeight: "700",
+  },
+  actionSection: {
+    textAlign: "right",
+  },
+  reportGrid: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.75rem",
+  },
+  reportItem: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: "0.75rem 1rem",
+    backgroundColor: "#f8fafc",
+    borderRadius: "8px",
+    border: "1px solid #f1f5f9",
+  },
+  reportLabel: {
+    fontWeight: "600",
+    color: "#1e293b",
+  },
+  reportCount: {
+    fontSize: "0.9rem",
+    color: "#475569",
+  },
+  reportErrors: {
+    color: "#dc2626",
+    fontSize: "0.85rem",
+    marginTop: "0.25rem",
+  },
+  spinnerSmall: {
+    width: "16px",
+    height: "16px",
+    border: "2px solid rgba(255,255,255,0.3)",
+    borderTop: "2px solid white",
+    borderRadius: "50%",
+    animation: "spin 1s linear infinite",
+    display: "inline-block",
+  },
 };
 
 export default ResetData;

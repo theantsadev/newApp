@@ -76,6 +76,21 @@ function FilterForm({ filtre, onFilter, onSubmit }) {
           style={styles.input}
         />
       </div>
+      <div style={styles.filterGroup}>
+        <label htmlFor="state_filter" style={styles.label}>
+          États
+        </label>
+        <select
+          id="state_filter"
+          name="state_filter"
+          value={filtre.state_filter}
+          onChange={onFilter}
+          style={styles.input}
+        >
+          <option value="exclude-cancelled">Sans annulées (défaut)</option>
+          <option value="all">Inclure les annulées</option>
+        </select>
+      </div>
       <button type="submit" style={styles.button}>
         Afficher
       </button>
@@ -83,20 +98,38 @@ function FilterForm({ filtre, onFilter, onSubmit }) {
   );
 }
 
-function SummaryCards({ totalCommandes, totalTtc, totalHt }) {
+function SummaryCards({
+  title,
+  tone = "blue",
+  totalCommandes,
+  totalTtc,
+  totalHt,
+}) {
+  const accent =
+    tone === "teal"
+      ? { borderLeft: "5px solid #14b8a6" }
+      : tone === "violet"
+        ? { borderLeft: "5px solid #8b5cf6" }
+        : { borderLeft: "5px solid #3b82f6" };
+
   return (
-    <div style={styles.cardGrid}>
-      <div style={styles.card}>
-        <p style={styles.cardLabel}>Commandes</p>
-        <p style={styles.cardValue}>{totalCommandes}</p>
+    <div style={styles.summaryBlock}>
+      <div style={styles.summaryHeader}>
+        <h2 style={styles.summaryTitle}>{title}</h2>
       </div>
-      <div style={styles.card}>
-        <p style={styles.cardLabel}>Total TTC</p>
-        <p style={styles.cardValue}>{formatEuro(totalTtc)}</p>
-      </div>
-      <div style={styles.card}>
-        <p style={styles.cardLabel}>Total HT</p>
-        <p style={styles.cardValue}>{formatEuro(totalHt)}</p>
+      <div style={styles.cardGrid}>
+        <div style={{ ...styles.card, ...accent }}>
+          <p style={styles.cardLabel}>Commandes</p>
+          <p style={styles.cardValue}>{totalCommandes}</p>
+        </div>
+        <div style={{ ...styles.card, ...accent }}>
+          <p style={styles.cardLabel}>Total TTC</p>
+          <p style={styles.cardValue}>{formatEuro(totalTtc)}</p>
+        </div>
+        <div style={{ ...styles.card, ...accent }}>
+          <p style={styles.cardLabel}>Total HT</p>
+          <p style={styles.cardValue}>{formatEuro(totalHt)}</p>
+        </div>
       </div>
     </div>
   );
@@ -147,6 +180,7 @@ const Dashboard = () => {
   const [filtre, setFiltre] = useState({
     date_min: new Date().toISOString().split("T")[0],
     date_max: "",
+    state_filter: "exclude-cancelled",
   });
 
   const toDateOnly = (value) => {
@@ -154,6 +188,19 @@ const Dashboard = () => {
   };
 
   // 1. Crée cette fonction en dehors de useEffect
+  const applyStateFilter = (data, currentFiltre) => {
+    return data.filter((commande) => {
+      const state = String(commande.current_state || "");
+
+      return (
+        currentFiltre.state_filter === "all" ||
+        state === "2" ||
+        state === "5" ||
+        state === "11"
+      );
+    });
+  };
+
   const applyFilter = (data, currentFiltre) => {
     return data.filter((commande) => {
       const dateCommande = toDateOnly(commande.date_add); // "2026-05-17"
@@ -169,11 +216,27 @@ const Dashboard = () => {
 
   // Chargement initial
   // 2. Dans le useEffect, remplace setFiltered(data) par :
+  // Chargement initial
   useEffect(() => {
     fetchOrderList()
       .then((data) => {
         setCommandes(data);
-        setFiltered(applyFilter(data, filtre)); // ← ici, filtre au lieu de data brut
+
+        // ✅ Date la plus ancienne parmi les commandes
+        const dates = data
+          .map((c) => toDateOnly(c.date_add))
+          .filter(Boolean)
+          .sort();
+        const oldest = dates[0] || new Date().toISOString().split("T")[0];
+
+        const defaultFiltre = {
+          date_min: oldest,
+          date_max: "",
+          state_filter: "exclude-cancelled",
+        };
+
+        setFiltre(defaultFiltre);
+        setFiltered(applyFilter(data, defaultFiltre));
         setLoading(false);
       })
       .catch((err) => {
@@ -195,11 +258,13 @@ const Dashboard = () => {
     setFiltered(applyFilter(commandes, filtre));
   };
 
-  // Calcul des stats par jour
-  const buildDailyStats = () => {
+  const filteredByState = applyStateFilter(filtered, filtre);
+  const displayedOrders = filteredByState;
+
+  const dailyStats = (() => {
     const rows = {};
 
-    filtered.forEach((commande) => {
+    displayedOrders.forEach((commande) => {
       const dayKey = getDayKey(commande.date_add) || "Sans date";
 
       if (!rows[dayKey]) {
@@ -214,43 +279,76 @@ const Dashboard = () => {
     return Object.values(rows).sort((a, b) =>
       String(a.date).localeCompare(String(b.date)),
     );
-  };
+  })();
 
-  const dailyStats = buildDailyStats();
-
-  const totalTtc = filtered.reduce((sum, c) => sum + toAmount(c.total_paid), 0);
-  const totalHt = filtered.reduce(
+  const totalTtc = filteredByState.reduce(
+    (sum, c) => sum + toAmount(c.total_paid),
+    0,
+  );
+  const totalHt = filteredByState.reduce(
     (sum, c) => sum + toAmount(c.total_paid_tax_excl),
     0,
   );
+  const commandesGlobal = applyStateFilter(commandes, filtre);
+  const totalTtcGlobal = commandesGlobal.reduce(
+    (sum, c) => sum + toAmount(c.total_paid),
+    0,
+  );
+  const totalHtGlobal = commandesGlobal.reduce(
+    (sum, c) => sum + toAmount(c.total_paid_tax_excl),
+    0,
+  );
+  const totalCommandesGlobal = commandesGlobal.length;
+
+  const totalCommandes = displayedOrders.length;
 
   // --- Rendu ---
 
-  if (loading) return <LoadingState />;
-  if (error) return <ErrorState message={error.message} />;
-
   return (
     <div style={styles.page}>
-      <h1 style={styles.title}>Tableau de bord</h1>
+      <div style={styles.headerSection}>
+        <h1 style={styles.title}>Tableau de bord</h1>
+        <p style={styles.subtitle}>
+          Suivez les performances de vente, le chiffre d'affaires et le nombre
+          total de commandes de votre boutique.
+        </p>
+      </div>
 
-      <FilterForm
-        filtre={filtre}
-        onFilter={handleFilter}
-        onSubmit={handleSubmit}
-      />
+      {/* ✅ Résumé global EN HAUT */}
+      {commandes.length > 0 && (
+        <SummaryCards
+          title="Résumé global"
+          tone="teal"
+          totalCommandes={totalCommandesGlobal}
+          totalTtc={totalTtcGlobal}
+          totalHt={totalHtGlobal}
+        />
+      )}
 
-      {filtered.length === 0 && <EmptyState />}
+      {/* Filtre ensuite */}
+      <div style={styles.filterCard}>
+        <FilterForm
+          filtre={filtre}
+          onFilter={handleFilter}
+          onSubmit={handleSubmit}
+        />
+      </div>
 
-      {filtered.length > 0 && (
+      {displayedOrders.length === 0 && <EmptyState />}
+
+      {/* Vue filtrée + tableau en bas */}
+      {displayedOrders.length > 0 && (
         <>
           <SummaryCards
-            totalCommandes={filtered.length}
+            title="Vue filtrée"
+            tone="blue"
+            totalCommandes={totalCommandes}
             totalTtc={totalTtc}
             totalHt={totalHt}
           />
           <DailyTable
             dailyStats={dailyStats}
-            totalCommandes={filtered.length}
+            totalCommandes={totalCommandes}
             totalTtc={totalTtc}
             totalHt={totalHt}
           />
@@ -264,116 +362,182 @@ const Dashboard = () => {
 
 const styles = {
   page: {
-    padding: "2rem",
-    fontFamily: "sans-serif",
-    maxWidth: 900,
+    padding: "2.5rem",
+    fontFamily: "'Outfit', 'Inter', sans-serif",
+    maxWidth: "1000px",
     margin: "0 auto",
+    color: "#1e293b",
+  },
+  headerSection: {
+    marginBottom: "2rem",
+    textAlign: "left",
   },
   title: {
-    fontSize: 22,
-    fontWeight: 500,
-    marginBottom: "1.5rem",
+    fontSize: "2.2rem",
+    fontWeight: "700",
+    color: "#0f172a",
+    margin: "0 0 0.5rem 0",
+    letterSpacing: "-0.5px",
+  },
+  subtitle: {
+    fontSize: "1rem",
+    color: "#64748b",
+    margin: 0,
+  },
+  filterCard: {
+    backgroundColor: "#ffffff",
+    borderRadius: "16px",
+    padding: "1.5rem",
+    boxShadow: "0 4px 15px rgba(0,0,0,0.03), 0 2px 4px rgba(0,0,0,0.01)",
+    border: "1px solid #e2e8f0",
+    marginBottom: "2rem",
   },
   filterForm: {
     display: "flex",
     alignItems: "flex-end",
-    gap: 12,
-    marginBottom: "1.5rem",
+    gap: 16,
     flexWrap: "wrap",
   },
   filterGroup: {
     display: "flex",
     flexDirection: "column",
-    gap: 4,
+    gap: 6,
   },
   label: {
-    fontSize: 13,
-    color: "#666",
+    fontSize: "0.85rem",
+    fontWeight: "600",
+    color: "#475569",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
   },
   input: {
-    height: 36,
-    padding: "0 10px",
-    fontSize: 14,
-    border: "1px solid #ccc",
-    borderRadius: 6,
+    height: 40,
+    padding: "0 12px",
+    fontSize: "0.95rem",
+    border: "1px solid #cbd5e1",
+    borderRadius: 8,
+    backgroundColor: "#fff",
+    color: "#1e293b",
+    outline: "none",
+    transition: "border-color 0.2s",
   },
   button: {
-    height: 36,
-    padding: "0 18px",
-    fontSize: 14,
-    border: "1px solid #ccc",
-    borderRadius: 6,
+    height: 40,
+    padding: "0 24px",
+    fontSize: "0.95rem",
+    fontWeight: "600",
+    border: "none",
+    borderRadius: 8,
     cursor: "pointer",
-    background: "#fff",
+    background: "#3b82f6",
+    color: "#fff",
+    boxShadow: "0 4px 12px rgba(59, 130, 246, 0.2)",
+    transition: "all 0.2s",
   },
   cardGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-    gap: 12,
-    marginBottom: "1.5rem",
+    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+    gap: 20,
+    marginBottom: "2.5rem",
+  },
+  summaryBlock: {
+    marginBottom: "2.5rem",
+  },
+  summaryHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: "0.85rem",
+  },
+  summaryTitle: {
+    margin: 0,
+    fontSize: "1.05rem",
+    fontWeight: "700",
+    color: "#0f172a",
+    letterSpacing: "-0.01em",
   },
   card: {
-    background: "#f5f5f5",
-    borderRadius: 8,
-    padding: "1rem",
+    background: "#ffffff",
+    borderRadius: 16,
+    padding: "1.75rem",
+    border: "1px solid #e2e8f0",
+    boxShadow: "0 4px 12px rgba(0,0,0,0.02)",
+    borderLeft: "5px solid #3b82f6",
   },
   cardLabel: {
-    fontSize: 12,
-    color: "#888",
+    fontSize: "0.85rem",
+    fontWeight: "600",
+    color: "#64748b",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
     margin: "0 0 6px",
   },
   cardValue: {
-    fontSize: 20,
-    fontWeight: 500,
+    fontSize: "2rem",
+    fontWeight: "800",
+    color: "#0f172a",
     margin: 0,
+    letterSpacing: "-0.03em",
   },
   tableWrapper: {
-    border: "1px solid #e0e0e0",
-    borderRadius: 8,
+    border: "1px solid #e2e8f0",
+    borderRadius: 16,
     overflow: "hidden",
+    backgroundColor: "#ffffff",
+    boxShadow: "0 4px 12px rgba(0,0,0,0.02)",
   },
   table: {
     width: "100%",
     borderCollapse: "collapse",
-    fontSize: 14,
+    fontSize: "0.95rem",
   },
   th: {
     textAlign: "left",
-    padding: "10px 16px",
-    background: "#f5f5f5",
-    fontWeight: 500,
-    fontSize: 12,
-    color: "#666",
-    borderBottom: "1px solid #e0e0e0",
+    padding: "1.1rem 1.5rem",
+    background: "#f8fafc",
+    fontWeight: "600",
+    fontSize: "0.8rem",
+    color: "#475569",
+    borderBottom: "1px solid #e2e8f0",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
   },
   td: {
-    padding: "10px 16px",
-    borderBottom: "1px solid #f0f0f0",
-    color: "#333",
+    padding: "1.1rem 1.5rem",
+    borderBottom: "1px solid #f1f5f9",
+    color: "#334155",
   },
   tdFooter: {
-    padding: "10px 16px",
-    fontWeight: 500,
-    color: "#111",
-    borderTop: "2px solid #e0e0e0",
+    padding: "1.2rem 1.5rem",
+    fontWeight: "700",
+    color: "#0f172a",
+    borderTop: "2.5px solid #e2e8f0",
   },
-  row: {},
+  row: {
+    transition: "background-color 0.2s",
+    "&:hover": {
+      backgroundColor: "#f8fafc",
+    },
+  },
   footerRow: {
-    background: "#fafafa",
+    background: "#f8fafc",
   },
   centered: {
     display: "flex",
     justifyContent: "center",
-    padding: "3rem",
+    alignItems: "center",
+    padding: "4rem 2rem",
   },
   stateText: {
-    color: "#666",
-    fontSize: 15,
+    color: "#64748b",
+    fontSize: "1.1rem",
+    fontWeight: "500",
   },
   errorBox: {
-    background: "#fff5f5",
-    borderRadius: 8,
-    border: "1px solid #ffd0d0",
+    background: "#fef2f2",
+    borderRadius: 12,
+    border: "1px solid #fee2e2",
+    color: "#991b1b",
   },
 };
 

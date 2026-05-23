@@ -6,6 +6,7 @@ import { fetchProductOptionList } from "../../services/productOptionService";
 import { fetchProductOptionValueList } from "../../services/productOptionValueService";
 import { getStoredCart, setStoredCart } from "../../services/cartService";
 import { fetchTaxRate } from "../../services/taxService";
+import { fetchStockAvailable } from "../../services/stockService";
 
 const Produit = () => {
   const { id } = useParams();
@@ -20,6 +21,9 @@ const Produit = () => {
   const [taxRate, setTaxRate] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [stockInfo, setStockInfo] = useState(null);
+  const [stockLoading, setStockLoading] = useState(false);
+  const [stockError, setStockError] = useState(null);
 
   // ✅ useEffect 1 — chargement initial
   useEffect(() => {
@@ -103,6 +107,19 @@ const Produit = () => {
     );
     setSelectedCombination(match || null);
   }, [selectedValues, combinations]);
+
+  useEffect(() => {
+    if (!produit?.id) return;
+
+    const attributeId = selectedCombination?.id ?? 0;
+    setStockLoading(true);
+    setStockError(null);
+
+    fetchStockAvailable(produit.id, attributeId)
+      .then((stock) => setStockInfo(stock))
+      .catch((err) => setStockError(err))
+      .finally(() => setStockLoading(false));
+  }, [produit?.id, selectedCombination?.id]);
 
   // ✅ return conditionnels APRÈS tous les hooks
   if (error) return <div>Erreur : {error.message}</div>;
@@ -231,8 +248,13 @@ const Produit = () => {
             <td>{referenceAffichee}</td>
           </tr>
           <tr>
-            <th>Quantite</th>
-            <td>{produit.quantite}</td>
+            <th>Stock disponible</th>
+            <td>
+              {stockLoading && "Chargement..."}
+              {!stockLoading && stockError && "Indisponible"}
+              {!stockLoading && !stockError &&
+                (stockInfo?.quantity ?? produit.quantite ?? "-")}
+            </td>
           </tr>
           <tr>
             <th>Condition</th>

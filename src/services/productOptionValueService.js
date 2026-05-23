@@ -1,5 +1,5 @@
-import { requestXml, deleteOne, postXml, patchXml } from "./prestashopClient";
-import { parseXmlToJson, getValue } from "../shared/xmlUtils";
+import { requestXml, deleteOne, postXml, patchXml, fetchIdByFilter } from "./prestashopClient";
+import { parseXmlToJson, getValue, buildLangXml } from "../shared/xmlUtils";
 
 const ressource = "product_option_values";
 
@@ -37,3 +37,28 @@ export const deleteProductOptionValueById = async (id) => deleteOne(ressource, i
 export const createProductOptionValueFromXml = async (xmlText) => postXml(ressource, xmlText);
 
 export const patchProductOptionValueById = async (id, xmlText) => patchXml(`${ressource}/${id}`, xmlText);
+
+export const ensureOptionValue = async (optionId, name, color, languageIds) => {
+  let id = await fetchIdByFilter(
+    ressource,
+    "product_option_value",
+    "name",
+    name,
+  );
+  if (id) return id;
+
+  const colorTag = color ? `<color><![CDATA[${color}]]></color>` : "";
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <product_option_value>
+    <id_attribute_group><![CDATA[${optionId}]]></id_attribute_group>
+    ${colorTag}
+    <name>
+      ${buildLangXml(languageIds, name)}
+    </name>
+  </product_option_value>
+</prestashop>`;
+
+  id = await postXml(ressource, xml);
+  return id;
+};

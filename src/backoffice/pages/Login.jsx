@@ -15,7 +15,7 @@ const Login = () => {
 
   useEffect(() => {
     if (isAuthenticated()) {
-      navigate("/frontoffice/produits", { replace: true });
+      navigate("/backoffice/dashboard", { replace: true });
     }
   }, [navigate]);
 
@@ -36,7 +36,7 @@ const Login = () => {
     }
 
     setStoredApiKey(cleaned);
-    const redirectTo = location.state?.from?.pathname || "frontoffice/produits";
+    const redirectTo = location.state?.from?.pathname || "backoffice/dashboard";
     navigate(redirectTo, { replace: true });
   };
 

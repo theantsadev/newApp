@@ -1,5 +1,5 @@
-import { requestXml, deleteOne, postXml } from "./prestashopClient";
-import { parseXmlToJson, getValue } from "../shared/xmlUtils";
+import { requestXml, deleteOne, postXml, fetchIdByFilter } from "./prestashopClient";
+import { parseXmlToJson, getValue, buildLangXml, slugify } from "../shared/xmlUtils";
 
 const ressource = "categories";
 
@@ -39,7 +39,9 @@ export const fetchCategoryList = async () => {
 
     const response = [];
     categories.forEach((category) => {
-        response.push(parseCategory(category));
+        if (category.id!=1) {
+            response.push(parseCategory(category))
+        }
     });
     return response;
 };
@@ -54,3 +56,33 @@ export const deleteCategoryById = async (id) => deleteOne(ressource, id);
 
 export const createCategoryFromXml = async (xmlText) =>
     postXml(ressource, xmlText);
+
+export const ensureCategory = async (name, languageIds) => {
+  const slug = slugify(name);
+  let id = await fetchIdByFilter(ressource, "category", "name", name);
+  if (id) return id;
+
+  id = await fetchIdByFilter(ressource, "category", "link_rewrite", slug);
+  if (id) return id;
+
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <category>
+    <active><![CDATA[1]]></active>
+    <id_shop_default><![CDATA[1]]></id_shop_default>
+    <id_parent><![CDATA[1]]></id_parent>
+    <name>
+      ${buildLangXml(languageIds, name)}
+    </name>
+    <link_rewrite>
+      ${buildLangXml(languageIds, slug)}
+    </link_rewrite>
+    <description>
+      ${buildLangXml(languageIds, name)}
+    </description>
+  </category>
+</prestashop>`;
+
+  id = await postXml(ressource, xml);
+  return id;
+};

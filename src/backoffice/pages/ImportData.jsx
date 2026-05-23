@@ -1,9 +1,21 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Papa from "papaparse";
 import JSZip from "jszip";
-import { getAuthHeader } from "../../config/prestashop";
-import { requestXml, postXml, patchXml } from "../../services/prestashopClient";
+import { requestXml, fetchLanguageIds, fetchIdByFilter } from "../../services/prestashopClient";
 import { getTextContent, parseXmlDoc } from "../../shared/xmlUtils";
+import { resetResources } from "../../services/resetService";
+import { ensureTaxSetup } from "../../services/taxService";
+import { ensureCategory } from "../../services/categoryService";
+import { ensureProduct, uploadProductImage } from "../../services/productService";
+import { ensureOption } from "../../services/productOptionService";
+import { ensureOptionValue } from "../../services/productOptionValueService";
+import { createCombination } from "../../services/combinationService";
+import { updateStock } from "../../services/stockService";
+import { ensureCustomer } from "../../services/customerService";
+import { ensureAddress } from "../../services/addressService";
+import { createCart, updateCartDate } from "../../services/cartService";
+import { createOrder, updateOrderDate, updatePaymentDate, updateOrderStateWithMovement } from "../../services/orderService";
+import { isCartOrderStateLabel } from "../../services/orderStateService";
 
 const REQUIRED_HEADERS = {
   produits: [
@@ -25,10 +37,35 @@ const REQUIRED_HEADERS = {
   commandes: ["date", "nom", "email", "pwd", "adresse", "achat", "etat"],
 };
 
-const TAX_CONFIG = {
-  11.65: { taxName: "TVA FR 11.65%", groupName: "TRG1" },
-  "5.60": { taxName: "TVA FR 5.6%", groupName: "TRG2" },
+const DATE_FIELDS = {
+  produits: ["date_availability_produit"],
+  commandes: ["date"],
 };
+
+const POSITIVE_FIELDS = {
+  produits: ["prix_ttc", "prix_achat", "Taxe"],
+  declinaisons: ["prix_vente_ttc", "stock_initial"],
+  commandes: [],
+};
+
+const RESET_KEYS = [
+  "order_histories",
+  "order_payments",
+  "orders",
+  "carts",
+  "addresses",
+  "customers",
+  "stock_availables",
+  "combinations",
+  "product_option_values",
+  "product_options",
+  "product_images",
+  "products",
+  "categories",
+  "tax_rules",
+  "tax_rule_groups",
+  "taxes",
+];
 
 const formatMissing = (headers, required) =>
   required.filter((col) => !headers.includes(col));
@@ -48,41 +85,26 @@ const calcPriceHt = (priceTtc, taxRate) => {
   return Math.round((ttc / (1 + rate)) * 100) / 100; // arrondi bancaire 2 décimales
 };
 
+const isValidDmyDate = (value) => {
+  if (!value) return false;
+  const match = /^\d{2}\/\d{2}\/\d{4}$/.test(value);
+  if (!match) return false;
+
+  const [day, month, year] = value.split("/").map(Number);
+  const date = new Date(year, month - 1, day);
+  return (
+    date.getFullYear() === year &&
+    date.getMonth() === month - 1 &&
+    date.getDate() === day
+  );
+};
+
 const toIsoDate = (value) => {
   if (!value) return "";
   const [day, month, year] = value.split("/");
   if (!day || !month || !year) return "";
   return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
 };
-
-const slugify = (value) =>
-  String(value || "")
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9-]/g, "");
-
-const normalizeText = (value) =>
-  String(value || "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim();
-
-const getTaxConfig = (rate) => {
-  const key = Number(rate).toFixed(4);
-  return (
-    TAX_CONFIG[key] || {
-      taxName: `TVA ${key}%`,
-      groupName: `TRG-${key}`,
-    }
-  );
-};
-
-const buildLangXml = (languageIds, value) =>
-  languageIds
-    .map((id) => `<language id="${id}"><![CDATA[${value}]]></language>`)
-    .join("");
 
 const ImportData = () => {
   const [files, setFiles] = useState({
@@ -98,43 +120,114 @@ const ImportData = () => {
     images: [],
   });
   const [errors, setErrors] = useState({
-    produits: null,
-    declinaisons: null,
-    commandes: null,
-    images: null,
+    produits: [],
+    declinaisons: [],
+    commandes: [],
+    images: [],
   });
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importLog, setImportLog] = useState([]);
+  const [delimiter, setDelimiter] = useState("");
+  const [imagesNonImportees, setImagesNonImportees] = useState(false);
+
+  const validateRows = (key, rows) => {
+    const rowErrors = [];
+    const dateFields = DATE_FIELDS[key] || [];
+    const positiveFields = POSITIVE_FIELDS[key] || [];
+
+    rows.forEach((row, index) => {
+      const lineNumber = index + 2;
+
+      dateFields.forEach((field) => {
+        const value = row[field];
+        if (value && !isValidDmyDate(value)) {
+          rowErrors.push(
+            `Ligne ${lineNumber} : ${field} doit etre au format DD/MM/YYYY`,
+          );
+        }
+      });
+
+      positiveFields.forEach((field) => {
+        const value = row[field];
+        if (key === "declinaisons" && field === "prix_vente_ttc") {
+          // Pour declinaisons, prix_vente_ttc peut être vide ou 0 (comportement par défaut)
+          if (value === "" || value == null || toNumber(value) === 0) {
+            return;
+          }
+        }
+        if (value === "" || value == null) {
+          rowErrors.push(
+            `Ligne ${lineNumber} : ${field} doit etre un montant positif`,
+          );
+          return;
+        }
+        if (toNumber(value) <= 0) {
+          rowErrors.push(
+            `Ligne ${lineNumber} : ${field} doit etre un montant positif`,
+          );
+        }
+      });
+    });
+
+    return rowErrors;
+  };
 
   const parseCsvFile = (key, file) => {
     if (!file) return;
 
     setLoading(true);
-    setErrors((prev) => ({ ...prev, [key]: null }));
+    setErrors((prev) => ({ ...prev, [key]: [] }));
+
+    //Recuperation des colonnes requises pour chaque ressource ou clé
+    const required = REQUIRED_HEADERS[key] || [];
 
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
+      delimiter: delimiter || undefined,
+      transformHeader: (header) => {
+        const lowerIncoming = String(header || "")
+          .toLowerCase()
+          .trim();
+        const matchedRequired = required.find(
+          (reqHeader) =>
+            String(reqHeader || "")
+              .toLowerCase()
+              .trim() === lowerIncoming,
+        );
+        return matchedRequired || header;
+      },
       complete: (result) => {
         const headers = result.meta.fields || [];
-        const required = REQUIRED_HEADERS[key] || [];
         const missing = formatMissing(headers, required);
+        const unexpected = headers.filter((col) => !required.includes(col));
+        const headerErrors = [];
 
         if (missing.length > 0) {
-          setErrors((prev) => ({
-            ...prev,
-            [key]: `Colonnes manquantes: ${missing.join(", ")}`,
-          }));
-          setParsed((prev) => ({ ...prev, [key]: [] }));
-        } else {
-          setParsed((prev) => ({ ...prev, [key]: result.data }));
+          headerErrors.push(`Colonnes manquantes: ${missing.join(", ")}`);
         }
 
+        if (unexpected.length > 0) {
+          headerErrors.push(`Colonnes non conformes: ${unexpected.join(", ")}`);
+        }
+
+        if (headerErrors.length > 0) {
+          setErrors((prev) => ({ ...prev, [key]: headerErrors }));
+          setParsed((prev) => ({ ...prev, [key]: [] }));
+          setLoading(false);
+          return;
+        }
+
+        const rows = result.data || [];
+        const rowErrors = validateRows(key, rows);
+
+        setErrors((prev) => ({ ...prev, [key]: rowErrors }));
+        setParsed((prev) => ({ ...prev, [key]: rows }));
         setLoading(false);
       },
       error: (err) => {
-        setErrors((prev) => ({ ...prev, [key]: err.message }));
+        setErrors((prev) => ({ ...prev, [key]: [err.message] }));
         setParsed((prev) => ({ ...prev, [key]: [] }));
         setLoading(false);
       },
@@ -142,30 +235,42 @@ const ImportData = () => {
   };
 
   const parseZipFile = async (file) => {
+    // Verifie si le fichier existe
     if (!file) return;
 
     setLoading(true);
-    setErrors((prev) => ({ ...prev, images: null }));
+
+    // Initialisation des erreurs et des images parsées à vide avant de lancer le parsing du ZIP
+    setErrors((prev) => ({ ...prev, images: [] }));
 
     try {
+
+      // Chargement du fichier ZIP avec JSZip
       const zip = await JSZip.loadAsync(file);
+
+      // zip.files est un objet avec comme clés les chemins des fichiers dans le ZIP, et comme valeurs des objets représentant les fichiers  
+      // Recupere des chemins dans le ZIP utilisé comme clé pour avoir le vrai fichier plus tard, en filtrant pour ne garder que les fichiers (pas les dossiers) qui ne sont pas dans __MACOSX et qui ne commencent pas par ._ (fichiers cachés créés par macOS)    
       const entries = Object.keys(zip.files).filter(
-        (name) => !zip.files[name].dir,
+        (name) => !zip.files[name].dir && !name.includes("__MACOSX") && !name.split("/").pop().startsWith("._")
       );
 
+      //Verifie si on a trouvé des fichiers valides dans le ZIP, sinon affiche une erreur et met à jour le state des images parsées à vide
       if (entries.length === 0) {
         setErrors((prev) => ({
           ...prev,
-          images: "Le ZIP ne contient aucun fichier.",
+          images: ["Le ZIP ne contient aucun fichier image valide."],
         }));
         setParsed((prev) => ({ ...prev, images: [] }));
       } else {
+        setErrors((prev) => ({ ...prev, images: [] }));
+
+        //On ne stocke que les clés pour plus de performance et repérage facile lors de l'import, le vrai fichier sera récupéré au moment de l'upload avec zip.file(entry).async("blob")
         setParsed((prev) => ({ ...prev, images: entries }));
       }
-    } catch (err) {
+    } catch {
       setErrors((prev) => ({
         ...prev,
-        images: "ZIP invalide.",
+        images: ["ZIP invalide."],
       }));
       setParsed((prev) => ({ ...prev, images: [] }));
     } finally {
@@ -173,336 +278,43 @@ const ImportData = () => {
     }
   };
 
+  // Fonction qui met à jour le state des fichiers sélectionnés et lance le parsing du CSV ou du ZIP
   const handleFileChange = (key) => (event) => {
+
+    //Récuperation du fichier sélectionné, ou null si aucun
     const file = event.target.files?.[0] || null;
+
+    // On recupere l'objet dans le state et on met à jour la clé correspondante avec le nouveau fichier
+    // ex :  key: produits,value :  file,
     setFiles((prev) => ({ ...prev, [key]: file }));
 
+    // Gestion du parsing de l'image
     if (key === "images") {
       parseZipFile(file);
       return;
     }
 
+    // Pour les autres types de fichiers, on lance le parsing du CSV
     parseCsvFile(key, file);
   };
 
-  const hasErrors = Object.values(errors).some(Boolean);
+  useEffect(() => {
+    if (files.produits) parseCsvFile("produits", files.produits);
+    if (files.declinaisons) parseCsvFile("declinaisons", files.declinaisons);
+    if (files.commandes) parseCsvFile("commandes", files.commandes);
+  }, [delimiter]);
+
+  const hasErrors = Object.values(errors).some(
+    (items) => items && items.length > 0,
+  );
   const readyToImport =
-    files.produits &&
-    files.declinaisons &&
-    files.commandes &&
-    files.images &&
-    !hasErrors;
+    files.produits && files.declinaisons && files.commandes && !hasErrors;
 
   const appendLog = (message) => {
     setImportLog((prev) => [...prev, message]);
   };
 
-  const fetchIdByFilter = async (endpoint, tag, field, value) => {
-    const xmlText = await requestXml(
-      `${endpoint}?filter[${field}]=[${encodeURIComponent(value)}]&display=[id]`,
-    );
-    const dom = parseXmlDoc(xmlText);
-    const node = dom.querySelector(tag);
-    return node?.querySelector("id")?.textContent?.trim() || "";
-  };
 
-  const fetchIdByFilters = async (endpoint, tag, filters) => {
-    const query = Object.entries(filters)
-      .map(([key, value]) => `filter[${key}]=[${encodeURIComponent(value)}]`)
-      .join("&");
-    const xmlText = await requestXml(`${endpoint}?${query}&display=[id]`);
-    const dom = parseXmlDoc(xmlText);
-    const node = dom.querySelector(tag);
-    return node?.querySelector("id")?.textContent?.trim() || "";
-  };
-
-  const fetchLanguageIds = async () => {
-    const xmlText = await requestXml("languages");
-    const dom = parseXmlDoc(xmlText);
-    const ids = Array.from(dom.querySelectorAll("language"))
-      .map((node) => node.getAttribute("id"))
-      .filter(Boolean);
-    return ids.length > 0 ? ids : ["1"];
-  };
-
-  const ensureTaxSetup = async (rate, languageIds) => {
-    const { taxName, groupName } = getTaxConfig(rate);
-    let taxId = await fetchIdByFilter("taxes", "tax", "name", taxName);
-    if (!taxId) {
-      const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
-  <tax>
-    <rate><![CDATA[${rate}]]></rate>
-    <active><![CDATA[1]]></active>
-    <name>
-      ${buildLangXml(languageIds, taxName)}
-    </name>
-  </tax>
-</prestashop>`;
-      taxId = await postXml("taxes", xml);
-    }
-
-    let groupId = await fetchIdByFilter(
-      "tax_rule_groups",
-      "tax_rule_group",
-      "name",
-      groupName,
-    );
-    if (!groupId) {
-      const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
-  <tax_rule_group>
-    <name><![CDATA[${groupName}]]></name>
-    <active><![CDATA[1]]></active>
-  </tax_rule_group>
-</prestashop>`;
-      groupId = await postXml("tax_rule_groups", xml);
-    }
-
-    const existingRuleId = await fetchIdByFilters("tax_rules", "tax_rule", {
-      id_tax_rules_group: groupId,
-      id_tax: taxId,
-      id_country: 8,
-    });
-    if (!existingRuleId) {
-      const ruleXml = `<?xml version="1.0" encoding="UTF-8"?>
-<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
-  <tax_rule>
-    <id_tax_rules_group><![CDATA[${groupId}]]></id_tax_rules_group>
-    <id_tax><![CDATA[${taxId}]]></id_tax>
-    <id_country><![CDATA[8]]></id_country>
-  </tax_rule>
-</prestashop>`;
-      await postXml("tax_rules", ruleXml);
-    }
-
-    return groupId;
-  };
-
-  const ensureCategory = async (name, languageIds) => {
-    const slug = slugify(name);
-    let id = await fetchIdByFilter("categories", "category", "name", name);
-    if (id) return id;
-
-    id = await fetchIdByFilter("categories", "category", "link_rewrite", slug);
-    if (id) return id;
-
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
-  <category>
-    <active><![CDATA[1]]></active>
-    <id_shop_default><![CDATA[1]]></id_shop_default>
-    <id_parent><![CDATA[1]]></id_parent>
-    <name>
-      ${buildLangXml(languageIds, name)}
-    </name>
-    <link_rewrite>
-      ${buildLangXml(languageIds, slug)}
-    </link_rewrite>
-    <description>
-      ${buildLangXml(languageIds, name)}
-    </description>
-  </category>
-</prestashop>`;
-
-    id = await postXml("categories", xml);
-    return id;
-  };
-
-  const ensureProduct = async (
-    product,
-    taxRuleGroupId,
-    categoryId,
-    type,
-    languageIds,
-  ) => {
-    let id = await fetchIdByFilter(
-      "products",
-      "product",
-      "reference",
-      product.reference,
-    );
-    if (id) return id;
-
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
-  <product>
-    <id_category_default><![CDATA[${categoryId}]]></id_category_default>
-    <id_tax_rules_group><![CDATA[${taxRuleGroupId}]]></id_tax_rules_group>
-    <id_shop_default><![CDATA[1]]></id_shop_default>
-    <state><![CDATA[1]]></state>
-    <show_price><![CDATA[1]]></show_price>
-    <reference><![CDATA[${product.reference}]]></reference>
-    <price><![CDATA[${product.priceHt.toFixed(4)}]]></price>
-    <wholesale_price><![CDATA[${product.wholesaleHt.toFixed(4)}]]></wholesale_price>
-    <available_date><![CDATA[${product.availableDate}]]></available_date>
-    <active><![CDATA[1]]></active>
-    <available_for_order><![CDATA[1]]></available_for_order>
-    <product_type><![CDATA[${type}]]></product_type>
-    <name>
-      ${buildLangXml(languageIds, product.name)}
-    </name>
-    <description>
-      ${buildLangXml(languageIds, product.name)}
-    </description>
-    <description_short>
-      ${buildLangXml(languageIds, product.name)}
-    </description_short>
-    <link_rewrite>
-      ${buildLangXml(languageIds, slugify(product.name))}
-    </link_rewrite>
-    <associations>
-      <categories>
-        <category><id><![CDATA[${categoryId}]]></id></category>
-      </categories>
-    </associations>
-  </product>
-</prestashop>`;
-
-    id = await postXml("products", xml);
-    return id;
-  };
-
-  const ensureOption = async (name, groupType, isColor, languageIds) => {
-    let id = await fetchIdByFilter(
-      "product_options",
-      "product_option",
-      "name",
-      name,
-    );
-    if (id) return id;
-
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
-  <product_option>
-    <is_color_group><![CDATA[${isColor ? 1 : 0}]]></is_color_group>
-    <group_type><![CDATA[${groupType}]]></group_type>
-    <name>
-      ${buildLangXml(languageIds, name)}
-    </name>
-    <public_name>
-      ${buildLangXml(languageIds, name)}
-    </public_name>
-  </product_option>
-</prestashop>`;
-
-    id = await postXml("product_options", xml);
-    return id;
-  };
-
-  const ensureOptionValue = async (optionId, name, color, languageIds) => {
-    let id = await fetchIdByFilter(
-      "product_option_values",
-      "product_option_value",
-      "name",
-      name,
-    );
-    if (id) return id;
-
-    const colorTag = color ? `<color><![CDATA[${color}]]></color>` : "";
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
-  <product_option_value>
-    <id_attribute_group><![CDATA[${optionId}]]></id_attribute_group>
-    ${colorTag}
-    <name>
-      ${buildLangXml(languageIds, name)}
-    </name>
-  </product_option_value>
-</prestashop>`;
-
-    id = await postXml("product_option_values", xml);
-    return id;
-  };
-
-  const createCombination = async (
-    productId,
-    optionValueId,
-    reference,
-    price,
-  ) => {
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
-  <combination>
-    <id_product><![CDATA[${productId}]]></id_product>
-    <reference><![CDATA[${reference}]]></reference>
-    <price><![CDATA[${price.toFixed(4)}]]></price>
-    <minimal_quantity><![CDATA[1]]></minimal_quantity>
-    <default_on><![CDATA[0]]></default_on>
-    <associations>
-      <product_option_values>
-        <product_option_value><id><![CDATA[${optionValueId}]]></id></product_option_value>
-      </product_option_values>
-    </associations>
-  </combination>
-</prestashop>`;
-
-    return postXml("combinations", xml);
-  };
-
-  const updateStock = async (productId, combinationId, quantity) => {
-    const xmlText = await requestXml(
-      `stock_availables?filter[id_product]=[${productId}]&filter[id_product_attribute]=[${combinationId}]&display=[id]`,
-    );
-    const dom = parseXmlDoc(xmlText);
-
-    // Avant : getAttribute("id") → cherche un attribut XML, retourne null
-    // const stockId = dom.querySelector("stock_available")?.getAttribute("id");
-
-    //  Après : querySelector("id") → cible le noeud enfant <id>
-    const stockId = dom
-      .querySelector("stock_available id")
-      ?.textContent?.trim();
-
-    appendLog(`Stock ID trouvé: ${stockId}`);
-    if (!stockId) return;
-
-    appendLog(
-      `Tsy Erreur Stock maj - id:${stockId} produit:${productId} attr:${combinationId} qty:${quantity}`,
-    );
-
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
-  <stock_available>
-    <id><![CDATA[${stockId}]]></id>
-    <id_product><![CDATA[${productId}]]></id_product>
-    <id_product_attribute><![CDATA[${combinationId}]]></id_product_attribute>
-    <quantity><![CDATA[${quantity}]]></quantity>
-    <depends_on_stock><![CDATA[0]]></depends_on_stock>
-    <out_of_stock><![CDATA[1]]></out_of_stock>
-  </stock_available>
-</prestashop>`;
-
-    await requestXml(`stock_availables/${stockId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/xml" },
-      body: xml,
-    });
-    appendLog(
-      `Stock maj - id:${stockId} produit:${productId} attr:${combinationId} qty:${quantity}`,
-    );
-  };
-
-  const uploadProductImage = async (productId, file) => {
-    const formData = new FormData();
-    formData.append("image", file, file.name);
-
-    const resp = await fetch(
-      `/prestashop-api/api/images/products/${productId}`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: getAuthHeader(),
-        },
-        body: formData,
-      },
-    );
-
-    if (!resp.ok) {
-      const text = await resp.text();
-      throw new Error(text || `HTTP ${resp.status}`);
-    }
-  };
 
   const parseAchat = (value) => {
     const entries = [];
@@ -510,272 +322,31 @@ const ImportData = () => {
     const regex = /"([^"]+)";(\d+);"?([^"]*)"?/g;
     let match = regex.exec(value);
     while (match) {
-      entries.push({
+      const entry = {
         reference: match[1],
         quantity: Number(match[2]),
         variant: match[3] || "",
-      });
+      };
+      const index = entries.findIndex((ent) => ent.reference === entry.reference && ent.variant === entry.variant);
+      if (index !== -1) {
+        entries[index].quantity += entry.quantity
+      }
+      else {
+        entries.push(entry);
+      }
       match = regex.exec(value);
     }
     return entries;
   };
 
-  const ensureCustomer = async (row) => {
-    let id = await fetchIdByFilter("customers", "customer", "email", row.email);
-    if (id) return id;
 
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
-  <customer>
-    <passwd><![CDATA[${row.pwd}]]></passwd>
-    <lastname><![CDATA[${row.nom}]]></lastname>
-    <firstname><![CDATA[${row.nom}]]></firstname>
-    <email><![CDATA[${row.email}]]></email>
-    <active><![CDATA[1]]></active>
-    <newsletter><![CDATA[0]]></newsletter>
-    <id_default_group><![CDATA[3]]></id_default_group>
-  </customer>
-</prestashop>`;
-
-    id = await postXml("customers", xml);
-    return id;
-  };
-
-  const ensureAddress = async (customerId, row) => {
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
-  <address>
-    <id_customer><![CDATA[${customerId}]]></id_customer>
-    <id_country><![CDATA[8]]></id_country>
-    <alias><![CDATA[domicile]]></alias>
-    <lastname><![CDATA[${row.nom}]]></lastname>
-    <firstname><![CDATA[${row.nom}]]></firstname>
-    <address1><![CDATA[${row.adresse}]]></address1>
-    <city><![CDATA[Antananarivo]]></city>
-    <postcode><![CDATA[75000]]></postcode>
-  </address>
-</prestashop>`;
-
-    return postXml("addresses", xml);
-  };
-
-  const createCart = async (customerId, addressId, items) => {
-    const rowsXml = items
-      .map(
-        (item) => `
-        <cart_row>
-          <id_product><![CDATA[${item.productId}]]></id_product>
-          <id_product_attribute><![CDATA[${item.attributeId}]]></id_product_attribute>
-          <id_address_delivery><![CDATA[${addressId}]]></id_address_delivery>
-          <id_customization><![CDATA[0]]></id_customization>
-          <quantity><![CDATA[${item.quantity}]]></quantity>
-        </cart_row>`,
-      )
-      .join("");
-
-    const deliveryOption = `{"${addressId}":"1,"}`;
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
-  <cart>
-    <id_address_delivery><![CDATA[${addressId}]]></id_address_delivery>
-    <id_address_invoice><![CDATA[${addressId}]]></id_address_invoice>
-    <id_currency><![CDATA[1]]></id_currency>
-    <id_customer><![CDATA[${customerId}]]></id_customer>
-    <id_lang><![CDATA[1]]></id_lang>
-    <id_shop><![CDATA[1]]></id_shop>
-    <id_shop_group><![CDATA[1]]></id_shop_group>
-    <id_carrier><![CDATA[1]]></id_carrier>
-    <delivery_option><![CDATA[${deliveryOption}]]></delivery_option>
-    <recyclable><![CDATA[0]]></recyclable>
-    <gift><![CDATA[0]]></gift>
-    <associations>
-      <cart_rows>
-        ${rowsXml}
-      </cart_rows>
-    </associations>
-  </cart>
-</prestashop>`;
-
-    return postXml("carts", xml);
-  };
-
-  const updateCartDate = async (id, date) => {
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
-  <cart>
-    <id><![CDATA[${id}]]></id>
-    <date_add><![CDATA[${date} 00:00:00]]></date_add>
-  </cart>
-</prestashop>`;
-
-    return patchXml("carts", xml);
-  };
-
-  const updateOrderDate = async (id, date) => {
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
-  <order>
-    <id><![CDATA[${id}]]></id>
-    <date_add><![CDATA[${date} 00:00:00]]></date_add>
-  </order>
-</prestashop>`;
-
-    return patchXml("orders", xml);
-  };
-
-  const updateOrderHistoryDate = async (id, date) => {
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
-  <order_history>
-    <id><![CDATA[${id}]]></id>
-    <date_add><![CDATA[${date} 00:00:00]]></date_add>
-  </order_history>
-</prestashop>`;
-
-    return patchXml("order_histories", xml);
-  };
-
-  const updatePaymentDate = async (id, date) => {
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
-  <order_payment>
-    <id><![CDATA[${id}]]></id>
-    <date_add><![CDATA[${date} 00:00:00]]></date_add>
-  </order_payment>
-</prestashop>`;
-
-    return patchXml("order_payments", xml);
-  };
-
-  const createOrder = async (row, cartId, customerId, addressId, items) => {
-    const stateMap = {
-      "en attente paiement a la livraison": {
-        stateId: 13,
-        module: "ps_cashondelivery",
-        payment: "Paiement comptant a la livraison (Cash on delivery)",
-        valid: 0,
-        paidReal: 0,
-      },
-      "paiement accepte": {
-        stateId: 2,
-        module: "ps_cashondelivery",
-        payment: "Paiement comptant a la livraison (Cash on delivery)",
-        valid: 1,
-        paidReal: "TOTAL",
-      },
-      "erreur de paiement": {
-        stateId: 8,
-        module: "ps_cashondelivery",
-        payment: "Paiement comptant a la livraison (Cash on delivery)",
-        valid: 0,
-        paidReal: 0,
-      },
-      "paiement effectue": {
-        stateId: 2,
-        module: "ps_cashondelivery",
-        payment: "Paiement comptant a la livraison (Cash on delivery)",
-        valid: 1,
-        paidReal: "TOTAL",
-      },
-      annule: {
-        stateId: 6,
-        module: "ps_cashondelivery",
-        payment: "Paiement comptant a la livraison (Cash on delivery)",
-        valid: 0,
-        paidReal: 0,
-      },
-    };
-
-    const normalizedEtat = normalizeText(row.etat);
-
-    const stateConfig = stateMap[normalizedEtat];
-    if (!stateConfig) {
-      throw new Error(`Etat commande inconnu: ${row.etat}`);
-    }
-
-    const totals = items.reduce(
-      (acc, item) => {
-        acc.totalHt += item.unitPriceHt * item.quantity;
-        acc.totalTtc += item.unitPriceTtc * item.quantity;
-        return acc;
-      },
-      { totalHt: 0, totalTtc: 0 },
-    );
-
-    const orderRowsXml = items
-      .map(
-        (item) => `
-        <order_row>
-          <product_id><![CDATA[${item.productId}]]></product_id>
-          <product_attribute_id><![CDATA[${item.attributeId}]]></product_attribute_id>
-          <product_quantity><![CDATA[${item.quantity}]]></product_quantity>
-          <product_name><![CDATA[${item.label}]]></product_name>
-          <product_reference><![CDATA[${item.reference}]]></product_reference>
-          <product_price><![CDATA[${item.unitPriceHt.toFixed(4)}]]></product_price>
-          <unit_price_tax_incl><![CDATA[${item.unitPriceTtc.toFixed(4)}]]></unit_price_tax_incl>
-          <unit_price_tax_excl><![CDATA[${item.unitPriceHt.toFixed(4)}]]></unit_price_tax_excl>
-        </order_row>`,
-      )
-      .join("");
-
-    const totalPaid = totals.totalTtc.toFixed(4);
-    const totalPaidReal =
-      stateConfig.paidReal === "TOTAL" ? totalPaid : stateConfig.paidReal;
-
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
-  <order>
-    <id_address_delivery><![CDATA[${addressId}]]></id_address_delivery>
-    <id_address_invoice><![CDATA[${addressId}]]></id_address_invoice>
-    <id_cart><![CDATA[${cartId}]]></id_cart>
-    <id_currency><![CDATA[1]]></id_currency>
-    <id_lang><![CDATA[1]]></id_lang>
-    <id_customer><![CDATA[${customerId}]]></id_customer>
-    <id_carrier><![CDATA[1]]></id_carrier>
-    <current_state><![CDATA[${stateConfig.stateId}]]></current_state>
-    <module><![CDATA[${stateConfig.module}]]></module>
-    <payment><![CDATA[${stateConfig.payment}]]></payment>
-    <valid><![CDATA[${stateConfig.valid}]]></valid>
-    <total_paid><![CDATA[${totalPaid}]]></total_paid>
-    <total_paid_tax_incl><![CDATA[${totalPaid}]]></total_paid_tax_incl>
-    <total_paid_tax_excl><![CDATA[${totals.totalHt.toFixed(4)}]]></total_paid_tax_excl>
-    <total_paid_real><![CDATA[${totalPaidReal}]]></total_paid_real>
-    <total_products><![CDATA[${totals.totalHt.toFixed(4)}]]></total_products>
-    <total_products_wt><![CDATA[${totalPaid}]]></total_products_wt>
-    <total_shipping><![CDATA[0]]></total_shipping>
-    <total_shipping_tax_incl><![CDATA[0]]></total_shipping_tax_incl>
-    <total_shipping_tax_excl><![CDATA[0]]></total_shipping_tax_excl>
-    <total_discounts><![CDATA[0]]></total_discounts>
-    <total_discounts_tax_incl><![CDATA[0]]></total_discounts_tax_incl>
-    <total_discounts_tax_excl><![CDATA[0]]></total_discounts_tax_excl>
-    <total_wrapping><![CDATA[0]]></total_wrapping>
-    <total_wrapping_tax_incl><![CDATA[0]]></total_wrapping_tax_incl>
-    <total_wrapping_tax_excl><![CDATA[0]]></total_wrapping_tax_excl>
-    <conversion_rate><![CDATA[1.000000]]></conversion_rate>
-    <round_mode><![CDATA[2]]></round_mode>
-    <round_type><![CDATA[1]]></round_type>
-    <associations>
-      <order_rows>
-        ${orderRowsXml}
-      </order_rows>
-    </associations>
-  </order>
-</prestashop>`;
-
-    const responseText = await requestXml("orders", {
-      method: "POST",
-      headers: { "Content-Type": "application/xml" },
-      body: xml,
-    });
-
-    const dom = parseXmlDoc(responseText);
-    const orderId = getTextContent(dom, "order > id");
-
-    return { orderId, stateId: stateConfig.stateId, totalPaid };
-  };
 
   const handleImport = async () => {
     if (!readyToImport || importing) return;
+    if (hasErrors) {
+      appendLog("Import annule: erreurs de validation detectees.");
+      return;
+    }
 
     setImporting(true);
     setImportLog([]);
@@ -783,9 +354,14 @@ const ImportData = () => {
     try {
       appendLog("Preparation des donnees...");
 
+
       const produitsData = parsed.produits;
       const declinaisonsData = parsed.declinaisons;
       const commandesData = parsed.commandes;
+
+
+      // date_availability_produit	nom	reference	prix_ttc	Taxe	categorie	prix_achat
+
 
       const productsByRef = {};
       const productHasCombi = {};
@@ -802,8 +378,7 @@ const ImportData = () => {
         const taxRate = toNumber(row.Taxe);
         const priceTtc = toNumber(row.prix_ttc);
         const priceHt = priceTtc / (1 + toPercent(row.Taxe));
-        const wholesaleTtc = toNumber(row.prix_achat);
-        const wholesaleHt = wholesaleTtc / (1 + toPercent(row.Taxe));
+        const wholesaleHt = toNumber(row.prix_achat);
 
         productsByRef[row.reference] = {
           name: row.nom,
@@ -828,6 +403,9 @@ const ImportData = () => {
             product.taxRate,
             languageIds,
           );
+          appendLog(
+            `Taxe ${product.taxRate}% configuree (ID Groupe: ${taxGroupByRate[product.taxRate]})`,
+          );
         }
       }
 
@@ -838,6 +416,9 @@ const ImportData = () => {
           categoryByName[product.category] = await ensureCategory(
             product.category,
             languageIds,
+          );
+          appendLog(
+            `Categorie inseree: ${product.category} (ID: ${categoryByName[product.category]})`,
           );
         }
       }
@@ -856,6 +437,7 @@ const ImportData = () => {
           languageIds,
         );
         productIds[product.reference] = productId;
+        appendLog(`Produit insere: ${product.reference} (ID: ${productId})`);
       }
 
       appendLog("Creation des options et valeurs...");
@@ -874,6 +456,9 @@ const ImportData = () => {
             isColor,
             languageIds,
           );
+          appendLog(
+            `Option inseree: ${specificite} (ID: ${optionIdByName[specificite]})`,
+          );
         }
 
         const key = `${specificite}:${karazany}`;
@@ -884,6 +469,9 @@ const ImportData = () => {
             karazany,
             colorMap[karazany],
             languageIds,
+          );
+          appendLog(
+            `Valeur d'option inseree: ${karazany} (ID: ${optionValueIds[key]})`,
           );
         }
       }
@@ -910,6 +498,7 @@ const ImportData = () => {
           supplement,
         );
         combinationIds[combRef] = combId;
+        appendLog(`Declinaison inseree: ${combRef} (ID: ${combId})`);
       }
 
       appendLog("Mise a jour des stocks...");
@@ -922,28 +511,57 @@ const ImportData = () => {
         const attributeId = karazany
           ? combinationIds[`${reference}-${karazany}`]
           : 0;
-        await updateStock(productId, attributeId, quantity);
+        const product = productsByRef[reference];
+        const dateAdd =
+          product?.availableDate ||
+          toIsoDate(row.date_availability_produit) ||
+          new Date().toISOString().split("T")[0];
+
+        await updateStock(productId, attributeId, quantity, dateAdd);
+        appendLog(
+          `Stock mis a jour: Produit ${productId}, Attribut ${attributeId}, Quantite ${quantity}`,
+        );
       }
 
       appendLog("Upload des images...");
-      const zip = await JSZip.loadAsync(files.images);
-      const imageEntries = Object.keys(zip.files).filter(
-        (name) => !zip.files[name].dir,
-      );
+      if (!imagesNonImportees && files.images) {
+        const zip = await JSZip.loadAsync(files.images);
+        const imageEntries = Object.keys(zip.files).filter(
+          (name) => !zip.files[name].dir,
+        );
 
-      for (const entry of imageEntries) {
-        const ref = entry.split("/").pop().split(".")[0];
-        const productId = productIds[ref];
-        if (!productId) continue;
-        const blob = await zip.files[entry].async("blob");
-        const file = new File([blob], entry);
-        await uploadProductImage(productId, file);
+        for (const entry of imageEntries) {
+          const ref = entry.split("/").pop().split(".")[0];
+          const productId = productIds[ref];
+          if (!productId) {
+            appendLog(
+              `Avertissement: image ${entry} ignorée (aucun produit correspondant à la référence ${ref})`,
+            );
+            continue;
+          }
+          try {
+            const blob = await zip.files[entry].async("blob");
+            const file = new File([blob], entry);
+            await uploadProductImage(productId, file);
+          } catch (imgErr) {
+            appendLog(
+              `Avertissement: Impossible d'uploader l'image pour ${ref} - ${imgErr.message}`,
+            );
+          }
+        }
+      } else {
+        appendLog("Aucun ZIP d'images fourni, etape ignoree.");
       }
 
       appendLog("Creation des commandes...");
       for (const row of commandesData) {
         const customerId = await ensureCustomer(row);
+        appendLog(`Client recupere/cree: ${row.email} (ID: ${customerId})`);
         const addressId = await ensureAddress(customerId, row);
+        appendLog(
+          `Adresse creee/associee pour le client ${customerId} (ID: ${addressId})`,
+        );
+
         const achatItems = parseAchat(row.achat);
 
         const items = achatItems.map((item) => {
@@ -987,12 +605,13 @@ const ImportData = () => {
 
         const date = toIsoDate(row.date);
         const cartId = await createCart(customerId, addressId, items);
+        appendLog(
+          `Panier (Cart) cree: ID ${cartId} pour le client ${customerId}`,
+        );
 
         await updateCartDate(cartId, date);
 
-        const normalizedEtat = row.etat ? normalizeText(row.etat) : "";
-        if (normalizedEtat && normalizedEtat !== "dans le panier") {
-          console.log("Date de commande : " + toIsoDate(row.date));
+        if (!isCartOrderStateLabel(row.etat)) {
           const order = await createOrder(
             row,
             cartId,
@@ -1006,7 +625,11 @@ const ImportData = () => {
             const dom = parseXmlDoc(text);
             return getTextContent(dom, "order > reference");
           });
-          console.log("Reference de commande : " + reference);
+
+          appendLog(
+            `Commande creee: ${reference} (ID: ${order.orderId}, Etat initial: ${order.stateId})`,
+          );
+
           const orderPaymentId = await fetchIdByFilter(
             "order_payments",
             "order_payment",
@@ -1014,13 +637,21 @@ const ImportData = () => {
             reference,
           );
           await updateOrderDate(order.orderId, date);
+          await updateOrderStateWithMovement(
+            order.orderId,
+            order.stateId,
+            date + " 00:00:00",
+          );
+
           if (orderPaymentId) {
             await updatePaymentDate(orderPaymentId, date);
           } else {
-            appendLog(
-              `Aucun paiement trouve pour la commande ${order.reference}`,
-            );
+            appendLog(`Aucun paiement trouve pour la commande ${reference}`);
           }
+        } else {
+          appendLog(
+            `La ligne du panier ${cartId} reste à l'état "${row.etat}" (aucune commande générée)`,
+          );
         }
 
         // order_history et order_payment sont gérés automatiquement par PrestaShop
@@ -1030,16 +661,60 @@ const ImportData = () => {
       appendLog("Import termine.");
     } catch (err) {
       appendLog(`Erreur: ${err.message}`);
+      appendLog("Rollback: reinitialisation des ressources...");
+
+      try {
+        await resetResources(RESET_KEYS, {
+          onProgress: (key, value) => appendLog(`Rollback ${key} ${value}%`),
+        });
+        appendLog("Rollback termine.");
+      } catch (resetErr) {
+        appendLog(`Rollback erreur: ${resetErr.message}`);
+      }
     } finally {
       setImporting(false);
     }
   };
 
   return (
-    <div>
-      <h1>Import Data</h1>
-      <p>Importer 3 fichiers CSV + 1 ZIP d'images.</p>
+    <div
+      style={{
+        padding: "2.5rem",
+        fontFamily: "'Outfit', 'Inter', sans-serif",
+        maxWidth: "800px",
+        margin: "0 auto",
+      }}
+    >
+      <h1
+        style={{
+          fontSize: "2.2rem",
+          fontWeight: "700",
+          color: "#0f172a",
+          margin: "0 0 0.5rem 0",
+          letterSpacing: "-0.5px",
+        }}
+      >
+        Import Data
+      </h1>
+      <p style={{ fontSize: "1.5rem", color: "#64748b", margin: "0 0 2rem 0" }}>
+        Importer 3 fichiers CSV + 1 ZIP d'images.
+      </p>
 
+      {/* Option de séparateur CSV */}
+      <div style={{ marginBottom: "20px" }}>
+        <label htmlFor="csv-delimiter">Séparateur CSV : </label>
+        <select
+          id="csv-delimiter"
+          value={delimiter}
+          onChange={(e) => setDelimiter(e.target.value)}
+        >
+          <option value="">Détection automatique</option>
+          <option value=",">Virgule (,)</option>
+          <option value=";">Point-virgule (;)</option>
+        </select>
+      </div>
+
+      {/* Input pour Produits/Categories (CSV)  */}
       <div>
         <label htmlFor="csv-produits">CSV Produits/Categories</label>
         <br />
@@ -1047,10 +722,12 @@ const ImportData = () => {
           id="csv-produits"
           type="file"
           accept=".csv"
+          // OnChange attend une fonction avec un arg mais pas une valeur de fonction 
           onChange={handleFileChange("produits")}
         />
       </div>
 
+      {/* Input pour Declinaisons/Stocks (CSV) */}
       <div>
         <label htmlFor="csv-declinaisons">CSV Declinaisons/Stocks</label>
         <br />
@@ -1062,6 +739,7 @@ const ImportData = () => {
         />
       </div>
 
+      {/* Input pour Commandes (CSV) */}
       <div>
         <label htmlFor="csv-commandes">CSV Commandes</label>
         <br />
@@ -1073,6 +751,7 @@ const ImportData = () => {
         />
       </div>
 
+      {/* Input pour Images (ZIP) */}
       <div>
         <label htmlFor="zip-images">ZIP Images</label>
         <br />
@@ -1084,7 +763,17 @@ const ImportData = () => {
         />
       </div>
 
+      {/* Checkbox pour ne pas importer les images */}
+      <input
+        type="checkbox"
+        checked={imagesNonImportees}
+        onChange={(e) => setImagesNonImportees(e.target.checked)}
+      />
+      <label>Ne pas importer les images</label>
+
       <br />
+
+      {/* Bouton qui declenche l'import */}
       <button
         disabled={!readyToImport || loading || importing}
         onClick={handleImport}
@@ -1092,6 +781,7 @@ const ImportData = () => {
         {importing ? "Import en cours..." : "Importer"}
       </button>
 
+      {/*  Resumé des fichiers selectionnés */}
       <div>
         <p>Fichiers selectionnes :</p>
         <ul>
@@ -1102,14 +792,58 @@ const ImportData = () => {
         </ul>
       </div>
 
+      {/*  Etape de validation de chaque fichier */}
       <div>
         <h3>Validation</h3>
         <ul>
-          <li>Produits/Categories : {errors.produits || "OK"}</li>
-          <li>Declinaisons/Stocks : {errors.declinaisons || "OK"}</li>
-          <li>Commandes : {errors.commandes || "OK"}</li>
-          <li>Images ZIP : {errors.images || "OK"}</li>
+          <li>
+            Produits/Categories :{" "}
+            {errors.produits.length > 0
+              ? `${errors.produits.length} erreur(s)`
+              : "OK"}
+          </li>
+          <li>
+            Declinaisons/Stocks :{" "}
+            {errors.declinaisons.length > 0
+              ? `${errors.declinaisons.length} erreur(s)`
+              : "OK"}
+          </li>
+          <li>
+            Commandes :{" "}
+            {errors.commandes.length > 0
+              ? `${errors.commandes.length} erreur(s)`
+              : "OK"}
+          </li>
+          <li>
+            Images ZIP :{" "}
+            {errors.images.length > 0
+              ? `${errors.images.length} erreur(s)`
+              : "OK"}
+          </li>
         </ul>
+
+        {(errors.produits.length > 0 ||
+          errors.declinaisons.length > 0 ||
+          errors.commandes.length > 0 ||
+          errors.images.length > 0) && (
+            <details>
+              <summary>Details des erreurs</summary>
+              <ul>
+                {errors.produits.map((item, index) => (
+                  <li key={`produits-${index}`}>Produits: {item}</li>
+                ))}
+                {errors.declinaisons.map((item, index) => (
+                  <li key={`declinaisons-${index}`}>Declinaisons: {item}</li>
+                ))}
+                {errors.commandes.map((item, index) => (
+                  <li key={`commandes-${index}`}>Commandes: {item}</li>
+                ))}
+                {errors.images.map((item, index) => (
+                  <li key={`images-${index}`}>Images: {item}</li>
+                ))}
+              </ul>
+            </details>
+          )}
       </div>
 
       <div>
@@ -1122,6 +856,7 @@ const ImportData = () => {
         </ul>
       </div>
 
+      {/* Log de l'import pour le suivi  */}
       <div>
         <h3>Log import</h3>
         <ul>

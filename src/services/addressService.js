@@ -1,4 +1,4 @@
-import { requestXml } from "./prestashopClient";
+import { requestXml, postXml } from "./prestashopClient";
 import { parseXmlToJson, getValue } from "../shared/xmlUtils";
 
 const ressource = "addresses";
@@ -30,4 +30,22 @@ export const fetchAddressesByCustomerId = async (idCustomer) => {
     response.push(parseAddress(address));
   });
   return response;
+};
+
+export const ensureAddress = async (customerId, row) => {
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <address>
+    <id_customer><![CDATA[${customerId}]]></id_customer>
+    <id_country><![CDATA[8]]></id_country>
+    <alias><![CDATA[domicile]]></alias>
+    <lastname><![CDATA[${row.nom}]]></lastname>
+    <firstname><![CDATA[${row.nom}]]></firstname>
+    <address1><![CDATA[${row.adresse}]]></address1>
+    <city><![CDATA[Antananarivo]]></city>
+    <postcode><![CDATA[75000]]></postcode>
+  </address>
+</prestashop>`;
+
+  return postXml(ressource, xml);
 };

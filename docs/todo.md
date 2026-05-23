@@ -40,4 +40,9 @@
 | 38 | FrontOffice | Produit | ListeProduits | Concevoir le formulaire de recherche multi-critères (nom, catégorie, prix) | Affichage | ETU003327 | 20 | 20 | 0 |  |
 | 39 | FrontOffice | Produit | ListeProduits | Logique métier de filtrage multi-critère en temps réel côté client | Métier | ETU003327 | 20 | 20 | 0 |  |
 | 40 | FrontOffice | Produit | ListeProduits | Intégrer les catégories dynamiques PrestaShop dans le sélecteur du filtre | Intégration | ETU003327 | 15 | 15 | 0 |  |
+| 41 | Backoffice | Dashboard | Dashboard | Séparer visuellement le résumé global et la vue filtrée du tableau de bord | Affichage | ETU003327 | 15 | 15 | 0 | fait |
+| 42 | Backoffice | Dashboard | Dashboard | Ajouter les totaux globaux (TTC, HT) en excluant les commandes annulées par défaut | Métier | ETU003327 | 20 | 20 | 0 | fait |
+| 43 | Backoffice | Statistiques | StatistiquesParCategorie | Corriger le calcul de la quantité en stock pour les produits ayant plusieurs variantes | Métier | ETU003327 | 25 | 25 | 0 | fait |
+| 44 | Backoffice | Statistiques | StatistiquesParCategorie | Ajouter l'exclusion des commandes annulées dans les statistiques et ajouter les totaux | Intégration | ETU003327 | 20 | 20 | 0 | fait |
+| 45 | Backoffice | Import Data | Import | Rendre l'import des images (fichier ZIP) non obligatoire lors de l'intégration des csv | Métier | ETU003327 | 10 | 10 | 0 | fait |
 

@@ -4,8 +4,6 @@ import Accueil from "./frontoffice/pages/Accueil";
 import FrontOfficeLayout from "./frontoffice/components/FrontOfficeLayout";
 import ListeProduits from "./frontoffice/pages/ListeProduits";
 import Produit from "./frontoffice/pages/Produit";
-import FormProduit from "./backoffice/pages/FormProduit";
-import ImportCsv from "./backoffice/pages/ImportCsv";
 import Login from "./backoffice/pages/Login";
 import ResetData from "./backoffice/pages/ResetData";
 import ImportData from "./backoffice/pages/ImportData";
@@ -17,44 +15,29 @@ import Commandes from "./frontoffice/pages/Commandes";
 import LoginFO from "./frontoffice/pages/LoginFO";
 import ProtectedRouteFO from "./shared/ProtectedRouteFO";
 import Dashboard from "./backoffice/pages/Dashboard";
+import StockManager from "./backoffice/pages/StockManager";
+import StatistiquesParCategorie from "./backoffice/pages/StatistiquesParCategorie";
+import BackOfficeLayout from "./backoffice/components/BackOfficeLayout";
 
 function App() {
   return (
     <Routes>
       <Route path="/" element={<Accueil />} />
       <Route path="/backoffice/login" element={<Login />} />
-      <Route
-        path="/backoffice/reset-data"
-        element={
-          <ProtectedRoute>
-            <ResetData />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/backoffice/import-data"
-        element={
-          <ProtectedRoute>
-            <ImportData />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/backoffice/commandes"
-        element={
-          <ProtectedRoute>
-            <ListeCommandes />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/backoffice/dashboard"
-        element={
-          <ProtectedRoute>
-            <Dashboard />
-          </ProtectedRoute>
-        }
-      />
+
+      {/* Backoffice routes wrapped in protected layout */}
+      <Route element={
+        <ProtectedRoute>
+          <BackOfficeLayout />
+        </ProtectedRoute>
+      }>
+        <Route path="/backoffice/reset-data" element={<ResetData />} />
+        <Route path="/backoffice/import-data" element={<ImportData />} />
+        <Route path="/backoffice/commandes" element={<ListeCommandes />} />
+        <Route path="/backoffice/statistiques" element={<StatistiquesParCategorie />} />
+        <Route path="/backoffice/dashboard" element={<Dashboard />} />
+        <Route path="/backoffice/stock" element={<StockManager />} />
+      </Route>
       <Route path="/frontoffice/login" element={<LoginFO />} />
 
       {/* FrontOffice store routes wrapped in layout */}

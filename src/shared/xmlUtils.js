@@ -33,3 +33,15 @@ export const buildXmlFromJson = (json) => {
   const builder = new XMLBuilder({ ...parserConfig, format: true });
   return builder.build(json);
 };
+
+export const buildLangXml = (languageIds, value) =>
+  languageIds
+    .map((id) => `<language id="${id}"><![CDATA[${value}]]></language>`)
+    .join("");
+
+export const slugify = (value) =>
+  String(value || "")
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-]/g, "");

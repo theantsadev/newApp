@@ -60,3 +60,28 @@ export const createCombinationFromXml = async (xmlText) =>
 
 export const patchCombinationById = async (id, xmlText) =>
     patchXml(`${ressource}/${id}`, xmlText);
+
+export const createCombination = async (
+  productId,
+  optionValueId,
+  reference,
+  price,
+) => {
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <combination>
+    <id_product><![CDATA[${productId}]]></id_product>
+    <reference><![CDATA[${reference}]]></reference>
+    <price><![CDATA[${price.toFixed(4)}]]></price>
+    <minimal_quantity><![CDATA[1]]></minimal_quantity>
+    <default_on><![CDATA[0]]></default_on>
+    <associations>
+      <product_option_values>
+        <product_option_value><id><![CDATA[${optionValueId}]]></id></product_option_value>
+      </product_option_values>
+    </associations>
+  </combination>
+</prestashop>`;
+
+  return postXml(ressource, xml);
+};

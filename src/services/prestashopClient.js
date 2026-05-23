@@ -64,3 +64,31 @@ export const postXml = async (endpoint, xmlText) => {
   const dom = parseXmlDoc(responseText);
   return getTextContent(dom, "id") || "?";
 };
+
+export const fetchIdByFilter = async (endpoint, tag, field, value) => {
+  const xmlText = await requestXml(
+    `${endpoint}?filter[${field}]=[${encodeURIComponent(value)}]&display=[id]`,
+  );
+  const dom = parseXmlDoc(xmlText);
+  const node = dom.querySelector(tag);
+  return node?.querySelector("id")?.textContent?.trim() || "";
+};
+
+export const fetchIdByFilters = async (endpoint, tag, filters) => {
+  const query = Object.entries(filters)
+    .map(([key, value]) => `filter[${key}]=[${encodeURIComponent(value)}]`)
+    .join("&");
+  const xmlText = await requestXml(`${endpoint}?${query}&display=[id]`);
+  const dom = parseXmlDoc(xmlText);
+  const node = dom.querySelector(tag);
+  return node?.querySelector("id")?.textContent?.trim() || "";
+};
+
+export const fetchLanguageIds = async () => {
+  const xmlText = await requestXml("languages");
+  const dom = parseXmlDoc(xmlText);
+  const ids = Array.from(dom.querySelectorAll("language"))
+    .map((node) => node.getAttribute("id"))
+    .filter(Boolean);
+  return ids.length > 0 ? ids : ["1"];
+};

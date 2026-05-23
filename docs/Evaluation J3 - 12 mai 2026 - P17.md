@@ -6,7 +6,7 @@
 
 ## 
 
-## Jour 1
+## Jour 1 : 11/05/2026
 
 NewAPP
 
@@ -40,7 +40,7 @@ Note ce 12/05 : utiliser France comme Pays, et Euro comme devise
 
 Note : Créer uniquement les pages demandées, pas de menu ni affichage non demandé
 
-## Jour 2
+## Jour 2 : 12/05/2026
 
 NewAPP
 
@@ -66,7 +66,7 @@ NewAPP
       2. catégorie  
       3. intervalle de prix
 
-## Jour 3
+## Jour 3 : 15/05/2026
 
 NewAPP
 

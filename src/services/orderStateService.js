@@ -3,6 +3,82 @@ import { parseXmlToJson, getValue } from "../shared/xmlUtils";
 
 const ressource = "order_states";
 
+const ORDER_STATE_CONFIG_BY_LABEL = {
+  "en attente paiement a la livraison": {
+    stateId: "13",
+    module: "ps_cashondelivery",
+    payment: "Paiement comptant a la livraison (Cash on delivery)",
+    valid: 0,
+    paidReal: 0,
+  },
+  "paiement accepte": {
+    stateId: "2",
+    module: "ps_cashondelivery",
+    payment: "Paiement comptant a la livraison (Cash on delivery)",
+    valid: 1,
+    paidReal: "TOTAL",
+  },
+  "erreur de paiement": {
+    stateId: "8",
+    module: "ps_cashondelivery",
+    payment: "Paiement comptant a la livraison (Cash on delivery)",
+    valid: 0,
+    paidReal: 0,
+  },
+  "paiement effectue": {
+    stateId: "2",
+    module: "ps_cashondelivery",
+    payment: "Paiement comptant a la livraison (Cash on delivery)",
+    valid: 1,
+    paidReal: "TOTAL",
+  },
+  livre: {
+    stateId: "5",
+    module: "ps_cashondelivery",
+    payment: "Paiement comptant a la livraison (Cash on delivery)",
+    valid: 1,
+    paidReal: "TOTAL",
+  },
+  annule: {
+    stateId: "6",
+    module: "ps_cashondelivery",
+    payment: "Paiement comptant a la livraison (Cash on delivery)",
+    valid: 0,
+    paidReal: 0,
+  },
+};
+
+export const MANAGED_ORDER_STATE_IDS = ["2", "5", "6", "11"];
+
+export const MANAGED_STATE_LABELS = {
+  cart: "Dans le panier",
+  "2": "Paiement accepte",
+  "11": "Paiement accepte",
+  "5": "Livre",
+  "6": "Annule",
+};
+
+export const normalizeOrderStateLabel = (value) => {
+  if (value == null) return "";
+  return String(value)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+};
+
+export const isCartOrderStateLabel = (value) => {
+  const normalized = normalizeOrderStateLabel(value);
+  return !normalized || normalized === "dans le panier";
+};
+
+export const getOrderStateConfigFromLabel = (value) => {
+  const normalized = normalizeOrderStateLabel(value);
+  return ORDER_STATE_CONFIG_BY_LABEL[normalized] || null;
+};
+
 export const parseOrderState = (orderState) => ({
   id: getValue(orderState.id),
   name: getValue(orderState.name?.language),
