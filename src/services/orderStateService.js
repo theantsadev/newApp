@@ -3,6 +3,10 @@ import { parseXmlToJson, getValue } from "../shared/xmlUtils";
 
 const ressource = "order_states";
 
+// ─────────────────────────────────────────────
+// Configuration & constantes
+// ─────────────────────────────────────────────
+
 const ORDER_STATE_CONFIG_BY_LABEL = {
   "en attente paiement a la livraison": {
     stateId: "13",
@@ -18,13 +22,6 @@ const ORDER_STATE_CONFIG_BY_LABEL = {
     valid: 1,
     paidReal: "TOTAL",
   },
-  "erreur de paiement": {
-    stateId: "8",
-    module: "ps_cashondelivery",
-    payment: "Paiement comptant a la livraison (Cash on delivery)",
-    valid: 0,
-    paidReal: 0,
-  },
   "paiement effectue": {
     stateId: "2",
     module: "ps_cashondelivery",
@@ -32,14 +29,21 @@ const ORDER_STATE_CONFIG_BY_LABEL = {
     valid: 1,
     paidReal: "TOTAL",
   },
-  livre: {
+  "erreur de paiement": {
+    stateId: "8",
+    module: "ps_cashondelivery",
+    payment: "Paiement comptant a la livraison (Cash on delivery)",
+    valid: 0,
+    paidReal: 0,
+  },
+  "livre": {
     stateId: "5",
     module: "ps_cashondelivery",
     payment: "Paiement comptant a la livraison (Cash on delivery)",
     valid: 1,
     paidReal: "TOTAL",
   },
-  annule: {
+  "annule": {
     stateId: "6",
     module: "ps_cashondelivery",
     payment: "Paiement comptant a la livraison (Cash on delivery)",
@@ -57,6 +61,10 @@ export const MANAGED_STATE_LABELS = {
   "5": "Livre",
   "6": "Annule",
 };
+
+// ─────────────────────────────────────────────
+// Helpers de normalisation
+// ─────────────────────────────────────────────
 
 export const normalizeOrderStateLabel = (value) => {
   if (value == null) return "";
@@ -79,22 +87,23 @@ export const getOrderStateConfigFromLabel = (value) => {
   return ORDER_STATE_CONFIG_BY_LABEL[normalized] || null;
 };
 
+// ─────────────────────────────────────────────
+// Parsing
+// ─────────────────────────────────────────────
+
 export const parseOrderState = (orderState) => ({
   id: getValue(orderState.id),
   name: getValue(orderState.name?.language),
 });
 
+// ─────────────────────────────────────────────
+// Lecture (fetch)
+// ─────────────────────────────────────────────
+
 export const fetchOrderStateList = async () => {
   const xmlText = await requestXml(`${ressource}?display=full`);
-  const orderStates =
-    parseXmlToJson(xmlText)?.prestashop?.order_states?.order_state || [];
-  const response = [];
-
-  orderStates.forEach((orderState) => {
-    response.push(parseOrderState(orderState));
-  });
-
-  return response;
+  const orderStates = parseXmlToJson(xmlText)?.prestashop?.order_states?.order_state || [];
+  return orderStates.map(parseOrderState);
 };
 
 export const fetchOrderStateById = async (id) => {
@@ -103,7 +112,8 @@ export const fetchOrderStateById = async (id) => {
   return parseOrderState(orderState);
 };
 
+/** Retourne un dictionnaire { id → name } pour tous les états de commande. */
 export const fetchAllOrderStates = async () => {
   const orderStates = await fetchOrderStateList();
-  return Object.fromEntries(orderStates.map((orderState) => [orderState.id, orderState.name]));
+  return Object.fromEntries(orderStates.map((os) => [os.id, os.name]));
 };

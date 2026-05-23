@@ -47,10 +47,23 @@ const Commande = () => {
   }, [navigate]);
 
   const totalsByTax = cart.reduce((acc, item) => {
-    const tax = Number(item.taxRate) || 0;
-    const ht = Number(item.prixHT) || Number(item.prix) / (1 + tax / 100);
+    // Normalize possible item shapes (old: prix/prixHT/taxRate, new: unitPriceHt/unitPriceTtc)
+    const tax =
+      item.taxRate != null
+        ? Number(item.taxRate)
+        : 0;
+
+    const unitPriceHt =
+      item.unitPriceHt != null
+        ? Number(item.unitPriceHt)
+        : item.prixHT != null
+          ? Number(item.prixHT)
+          : item.prix != null
+            ? Number(item.prix) / (1 + (item.taxRate || 0) / 100)
+            : 0;
+
     if (!acc[tax]) acc[tax] = 0;
-    acc[tax] += ht * Number(item.quantity);
+    acc[tax] += unitPriceHt * Number(item.quantity);
     return acc;
   }, {});
 
@@ -107,11 +120,20 @@ const Commande = () => {
 
       <h2>Vos articles</h2>
       <ul>
-        {cart.map((item, index) => (
-          <li key={index}>
-            <strong>{item.nom}</strong> - {item.quantity} x {item.prix} EUR
-          </li>
-        ))}
+        {cart.map((item, index) => {
+          const label = item.label || item.nom || item.reference || "Article";
+          const unitTtc =
+            item.unitPriceTtc != null
+              ? Number(item.unitPriceTtc)
+              : item.prix != null
+                ? Number(item.prix)
+                : (Number(item.unitPriceHt || item.prixHT || 0) * (1 + (Number(item.taxRate) || 0) / 100));
+          return (
+            <li key={index}>
+              <strong>{label}</strong> - {item.quantity} x {unitTtc.toFixed(2)} EUR
+            </li>
+          );
+        })}
       </ul>
 
       <h3>Sous-total : {totalPrix} EUR</h3>

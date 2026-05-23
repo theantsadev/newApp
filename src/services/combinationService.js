@@ -3,6 +3,10 @@ import { parseXmlToJson, getValue } from "../shared/xmlUtils";
 
 const ressource = "combinations";
 
+// ─────────────────────────────────────────────
+// Parsing
+// ─────────────────────────────────────────────
+
 export const parseCombination = (combination) => {
     const optionValues =
         combination.associations?.product_option_values?.product_option_value;
@@ -13,38 +17,34 @@ export const parseCombination = (combination) => {
             : [];
 
     return {
-        id: getValue(combination.id),
-        id_product: getValue(combination.id_product),
-        ean13: getValue(combination.ean13),
-        mpn: getValue(combination.mpn),
-        reference: getValue(combination.reference),
+        id:                 getValue(combination.id),
+        id_product:         getValue(combination.id_product),
+        ean13:              getValue(combination.ean13),
+        mpn:                getValue(combination.mpn),
+        reference:          getValue(combination.reference),
         supplier_reference: getValue(combination.supplier_reference),
-        prix: getValue(combination.price),
-        quantite_minimale: getValue(combination.minimal_quantity),
-        option_value_ids: optionValuesList.map((optionValue) => getValue(optionValue.id)),
+        prix:               getValue(combination.price),
+        quantite_minimale:  getValue(combination.minimal_quantity),
+        option_value_ids:   optionValuesList.map((ov) => getValue(ov.id)),
     };
 };
 
-// combinationService.js
-export const fetchCombinationsByProduct = async (productId) => {
-    const xmlText = await requestXml(
-        `combinations?filter[id_product]=[${productId}]&display=full`
-    );
-    const items = parseXmlToJson(xmlText)?.prestashop?.combinations?.combination || [];
-    const arr = Array.isArray(items) ? items : [items];
-    return arr.map(parseCombination);
-};
+// ─────────────────────────────────────────────
+// Lecture (fetch)
+// ─────────────────────────────────────────────
 
 export const fetchCombinationList = async () => {
     const xmlText = await requestXml(`${ressource}?display=full`);
     const combinations = parseXmlToJson(xmlText)?.prestashop?.combinations?.combination || [];
-    const response = [];
+    const arr = Array.isArray(combinations) ? combinations : [combinations];
+    return arr.map(parseCombination);
+};
 
-    combinations.forEach((combination) => {
-        response.push(parseCombination(combination));
-    });
-
-    return response;
+export const fetchCombinationsByProduct = async (productId) => {
+    const xmlText = await requestXml(`${ressource}?filter[id_product]=[${productId}]&display=full`);
+    const items = parseXmlToJson(xmlText)?.prestashop?.combinations?.combination || [];
+    const arr = Array.isArray(items) ? items : [items];
+    return arr.map(parseCombination);
 };
 
 export const fetchCombinationById = async (id) => {
@@ -53,21 +53,12 @@ export const fetchCombinationById = async (id) => {
     return parseCombination(combination);
 };
 
-export const deleteCombinationById = async (id) => deleteOne(ressource, id);
+// ─────────────────────────────────────────────
+// Création & mise à jour
+// ─────────────────────────────────────────────
 
-export const createCombinationFromXml = async (xmlText) =>
-    postXml(ressource, xmlText);
-
-export const patchCombinationById = async (id, xmlText) =>
-    patchXml(`${ressource}/${id}`, xmlText);
-
-export const createCombination = async (
-  productId,
-  optionValueId,
-  reference,
-  price,
-) => {
-  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+export const createCombination = async (productId, optionValueId, reference, price) => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
   <combination>
     <id_product><![CDATA[${productId}]]></id_product>
@@ -83,5 +74,13 @@ export const createCombination = async (
   </combination>
 </prestashop>`;
 
-  return postXml(ressource, xml);
+    return postXml(ressource, xml);
 };
+
+export const patchCombinationById = async (id, xmlText) => patchXml(`${ressource}/${id}`, xmlText);
+
+// ─────────────────────────────────────────────
+// Suppression
+// ─────────────────────────────────────────────
+
+export const deleteCombinationById = async (id) => deleteOne(ressource, id);

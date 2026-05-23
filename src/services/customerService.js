@@ -1,49 +1,57 @@
-import { requestXml, deleteOne, postXml, fetchIdByFilter } from "./prestashopClient";
+import { requestXml, postXml, fetchIdByFilter } from "./prestashopClient";
 import { parseXmlToJson, getValue } from "../shared/xmlUtils";
 
 const ressource = "customers";
 
+// ─────────────────────────────────────────────
+// Parsing
+// ─────────────────────────────────────────────
+
 export const parseCustomer = (customer) => ({
-  id: getValue(customer.id),
-  firstname: getValue(customer.firstname),
-  lastname: getValue(customer.lastname),
-  email: getValue(customer.email),
+    id:        getValue(customer.id),
+    firstname: getValue(customer.firstname),
+    lastname:  getValue(customer.lastname),
+    email:     getValue(customer.email),
 });
 
+// ─────────────────────────────────────────────
+// Lecture (fetch)
+// ─────────────────────────────────────────────
+
 export const fetchCustomerList = async () => {
-  const xmlText = await requestXml(`${ressource}?display=full`);
-  const customers = parseXmlToJson(xmlText)?.prestashop?.customers?.customer || [];
-  const response = [];
-  customers.forEach((customer) => {
-    response.push(parseCustomer(customer));
-  });
-  return response;
+    const xmlText = await requestXml(`${ressource}?display=full`);
+    const customers = parseXmlToJson(xmlText)?.prestashop?.customers?.customer || [];
+    return customers.map(parseCustomer);
 };
 
 export const fetchCustomerByEmail = async (email) => {
-  const xmlText = await requestXml(`${ressource}?display=full&filter[email]=[${email}]`);
-  const customers = parseXmlToJson(xmlText)?.prestashop?.customers?.customer;
+    const xmlText = await requestXml(`${ressource}?display=full&filter[email]=[${email}]`);
+    const customers = parseXmlToJson(xmlText)?.prestashop?.customers?.customer;
+    if (!customers) return null;
 
-  if (!customers) return null;
-
-  const customerList = Array.isArray(customers) ? customers : [customers];
-  if (customerList.length > 0) {
-    return parseCustomer(customerList[0]);
-  }
-  return null;
+    const customerList = Array.isArray(customers) ? customers : [customers];
+    return customerList.length > 0 ? parseCustomer(customerList[0]) : null;
 };
 
 export const fetchCustomerById = async (id) => {
-  const xmlText = await requestXml(`${ressource}/${id}`);
-  const customer = parseXmlToJson(xmlText)?.prestashop?.customer;
-  return parseCustomer(customer);
+    const xmlText = await requestXml(`${ressource}/${id}`);
+    const customer = parseXmlToJson(xmlText)?.prestashop?.customer;
+    return parseCustomer(customer);
 };
 
-export const ensureCustomer = async (row) => {
-  let id = await fetchIdByFilter(ressource, "customer", "email", row.email);
-  if (id) return id;
+// ─────────────────────────────────────────────
+// Création
+// ─────────────────────────────────────────────
 
-  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+/**
+ * Crée le client s'il n'existe pas déjà (contrôle par email).
+ * Retourne l'id existant ou celui du client nouvellement créé.
+ */
+export const ensureCustomer = async (row) => {
+    const existingId = await fetchIdByFilter(ressource, "customer", "email", row.email);
+    if (existingId) return existingId;
+
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
   <customer>
     <passwd><![CDATA[${row.pwd}]]></passwd>
@@ -56,6 +64,5 @@ export const ensureCustomer = async (row) => {
   </customer>
 </prestashop>`;
 
-  id = await postXml(ressource, xml);
-  return id;
+    return postXml(ressource, xml);
 };

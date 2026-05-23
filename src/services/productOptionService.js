@@ -3,50 +3,55 @@ import { parseXmlToJson, getValue, buildLangXml } from "../shared/xmlUtils";
 
 const ressource = "product_options";
 
+// ─────────────────────────────────────────────
+// Parsing
+// ─────────────────────────────────────────────
+
 export const parseProductOption = (opt) => ({
-  id: getValue(opt.id),
-  name: getValue(opt.name?.language),
-  public_name: getValue(opt.public_name?.language),
-  type: getValue(opt.group_type),
+    id:          getValue(opt.id),
+    name:        getValue(opt.name?.language),
+    public_name: getValue(opt.public_name?.language),
+    type:        getValue(opt.group_type),
 });
 
+// ─────────────────────────────────────────────
+// Lecture (fetch)
+// ─────────────────────────────────────────────
+
 export const fetchProductOptionList = async () => {
-  const xmlText = await requestXml(`${ressource}?display=full`);
-  const options = parseXmlToJson(xmlText)?.prestashop?.product_options?.product_option || [];
-  const arr = Array.isArray(options) ? options : [options];
-  return arr.map(parseProductOption);
+    const xmlText = await requestXml(`${ressource}?display=full`);
+    const options = parseXmlToJson(xmlText)?.prestashop?.product_options?.product_option || [];
+    const arr = Array.isArray(options) ? options : [options];
+    return arr.map(parseProductOption);
 };
 
 export const fetchProductOptionByIds = async (ids) => {
-  const filter = ids.map((id) => `[${id}]`).join(",");
-  const xmlText = await requestXml(`${ressource}?filter[id]=${filter}&display=full`);
-  const options = parseXmlToJson(xmlText)?.prestashop?.product_options?.product_option || [];
-  const arr = Array.isArray(options) ? options : [options];
-  return arr.map(parseProductOption);
+    const filter = ids.map((id) => `[${id}]`).join(",");
+    const xmlText = await requestXml(`${ressource}?filter[id]=${filter}&display=full`);
+    const options = parseXmlToJson(xmlText)?.prestashop?.product_options?.product_option || [];
+    const arr = Array.isArray(options) ? options : [options];
+    return arr.map(parseProductOption);
 };
 
 export const fetchProductOptionById = async (id) => {
-  const xmlText = await requestXml(`${ressource}/${id}`);
-  const option = parseXmlToJson(xmlText)?.prestashop?.product_option;
-  return parseProductOption(option);
+    const xmlText = await requestXml(`${ressource}/${id}`);
+    const option = parseXmlToJson(xmlText)?.prestashop?.product_option;
+    return parseProductOption(option);
 };
 
-export const deleteProductOptionById = async (id) => deleteOne(ressource, id);
+// ─────────────────────────────────────────────
+// Création & mise à jour
+// ─────────────────────────────────────────────
 
-export const createProductOptionFromXml = async (xmlText) => postXml(ressource, xmlText);
-
-export const patchProductOptionById = async (id, xmlText) => patchXml(`${ressource}/${id}`, xmlText);
-
+/**
+ * Crée l'option si elle n'existe pas déjà (contrôle par nom).
+ * Retourne l'id existant ou celui de l'option nouvellement créée.
+ */
 export const ensureOption = async (name, groupType, isColor, languageIds) => {
-  let id = await fetchIdByFilter(
-    ressource,
-    "product_option",
-    "name",
-    name,
-  );
-  if (id) return id;
+    const existingId = await fetchIdByFilter(ressource, "product_option", "name", name);
+    if (existingId) return existingId;
 
-  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
   <product_option>
     <is_color_group><![CDATA[${isColor ? 1 : 0}]]></is_color_group>
@@ -60,6 +65,13 @@ export const ensureOption = async (name, groupType, isColor, languageIds) => {
   </product_option>
 </prestashop>`;
 
-  id = await postXml(ressource, xml);
-  return id;
+    return postXml(ressource, xml);
 };
+
+export const patchProductOptionById = async (id, xmlText) => patchXml(`${ressource}/${id}`, xmlText);
+
+// ─────────────────────────────────────────────
+// Suppression
+// ─────────────────────────────────────────────
+
+export const deleteProductOptionById = async (id) => deleteOne(ressource, id);

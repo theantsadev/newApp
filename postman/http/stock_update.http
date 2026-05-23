@@ -1,0 +1,23 @@
+# =============================================================================
+# STOCK UPDATE ENDPOINT
+# =============================================================================
+
+@webservice_url = http://localhost:70/prestashop
+@webservice_basic_auth = {{YOUR_WEBSERVICE_KEY}}:
+
+# NOTE: Set base64 auth in your client if needed.
+
+### Update stock with movement
+POST {{webservice_url}}/api/stock_update
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <stock_update>
+    <id_product><![CDATA[{{id_product}}]]></id_product>
+    <id_product_attribute><![CDATA[{{id_product_attribute}}]]></id_product_attribute>
+    <quantity><![CDATA[{{delta_quantity}}]]></quantity>
+    <id_shop><![CDATA[{{id_shop}}]]></id_shop>
+  </stock_update>
+</prestashop>

@@ -3,7 +3,9 @@ import { parseXmlToJson, getValue, buildLangXml, slugify } from "../shared/xmlUt
 
 const ressource = "categories";
 
-// --- Parsing ---
+// ─────────────────────────────────────────────
+// Parsing
+// ─────────────────────────────────────────────
 
 export const parseCategory = (category) => {
     const products = category.associations?.products?.product;
@@ -14,36 +16,33 @@ export const parseCategory = (category) => {
             : [];
 
     return {
-        id: getValue(category.id),
-        id_parent: getValue(category.id_parent),
+        id:          getValue(category.id),
+        id_parent:   getValue(category.id_parent),
         level_depth: getValue(category.level_depth),
         nb_products: getValue(category.nb_products_recursive),
-        active: getValue(category.active),
-        is_root: getValue(category.is_root_category),
-        position: getValue(category.position),
-        date_ajout: getValue(category.date_add),
-        date_modif: getValue(category.date_upd),
-        nom: getValue(category.name?.language),
+        active:      getValue(category.active),
+        is_root:     getValue(category.is_root_category),
+        position:    getValue(category.position),
+        date_ajout:  getValue(category.date_add),
+        date_modif:  getValue(category.date_upd),
+        nom:         getValue(category.name?.language),
         description: getValue(category.description?.language),
-        meta_titre: getValue(category.meta_title?.language),
+        meta_titre:  getValue(category.meta_title?.language),
         product_ids: productsList.map((p) => Number(getValue(p.id))),
     };
 };
 
-// --- Services ---
+// ─────────────────────────────────────────────
+// Lecture (fetch)
+// ─────────────────────────────────────────────
 
 export const fetchCategoryList = async () => {
     const xmlText = await requestXml(`${ressource}?display=full`);
-    const categories =
-        parseXmlToJson(xmlText)?.prestashop?.categories?.category || [];
-
-    const response = [];
-    categories.forEach((category) => {
-        if (category.id!=1) {
-            response.push(parseCategory(category))
-        }
-    });
-    return response;
+    const categories = parseXmlToJson(xmlText)?.prestashop?.categories?.category || [];
+    // La catégorie racine (id=1) est exclue car elle n'est pas exploitable métier
+    return categories
+        .filter((category) => category.id != 1)
+        .map(parseCategory);
 };
 
 export const fetchCategoryById = async (id) => {
@@ -52,20 +51,23 @@ export const fetchCategoryById = async (id) => {
     return parseCategory(category);
 };
 
-export const deleteCategoryById = async (id) => deleteOne(ressource, id);
+// ─────────────────────────────────────────────
+// Création
+// ─────────────────────────────────────────────
 
-export const createCategoryFromXml = async (xmlText) =>
-    postXml(ressource, xmlText);
-
+/**
+ * Crée la catégorie si elle n'existe pas déjà (contrôle par nom puis par slug).
+ * Retourne l'id existant ou celui de la catégorie nouvellement créée.
+ */
 export const ensureCategory = async (name, languageIds) => {
-  const slug = slugify(name);
-  let id = await fetchIdByFilter(ressource, "category", "name", name);
-  if (id) return id;
+    const slug = slugify(name);
 
-  id = await fetchIdByFilter(ressource, "category", "link_rewrite", slug);
-  if (id) return id;
+    const existingId =
+        (await fetchIdByFilter(ressource, "category", "name", name)) ||
+        (await fetchIdByFilter(ressource, "category", "link_rewrite", slug));
+    if (existingId) return existingId;
 
-  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
   <category>
     <active><![CDATA[1]]></active>
@@ -83,6 +85,11 @@ export const ensureCategory = async (name, languageIds) => {
   </category>
 </prestashop>`;
 
-  id = await postXml(ressource, xml);
-  return id;
+    return postXml(ressource, xml);
 };
+
+// ─────────────────────────────────────────────
+// Suppression
+// ─────────────────────────────────────────────
+
+export const deleteCategoryById = async (id) => deleteOne(ressource, id);

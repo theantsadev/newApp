@@ -4,9 +4,14 @@ import { getOrderStateConfigFromLabel } from "./orderStateService";
 
 const ressource = "orders";
 
+// ─────────────────────────────────────────────
+// Parsing
+// ─────────────────────────────────────────────
+
 export const parseOrder = (order) => {
   const rows = order.associations?.order_rows?.order_row;
-  const rowsList = Array.isArray(rows) ? rows : (rows ? [rows] : []);
+  const rowsList = Array.isArray(rows) ? rows : rows ? [rows] : [];
+
   return {
     id: getValue(order.id),
     id_cart: getValue(order.id_cart),
@@ -29,40 +34,14 @@ export const parseOrder = (order) => {
   };
 };
 
+// ─────────────────────────────────────────────
+// Lecture (fetch)
+// ─────────────────────────────────────────────
+
 export const fetchOrderList = async () => {
   const xmlText = await requestXml(`${ressource}?display=full`);
   const orders = parseXmlToJson(xmlText)?.prestashop?.orders?.order || [];
-  const response = [];
-
-  orders.forEach((order) => {
-    response.push(parseOrder(order));
-  });
-
-  return response;
-};
-
-export const updateOrderState = async (id, newStateId) => {
-  const xmlText = `<?xml version="1.0" encoding="UTF-8"?>
-<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
-  <order>
-    <id>${id}</id>
-    <current_state>${Number(newStateId)}</current_state>
-  </order>
-</prestashop>`;
-  return patchXml(`${ressource}/${id}`, xmlText);
-};
-
-export const updateOrderStateWithMovement = async (orderId, newStateId, dateAdd = null) => {
-  const dateStr = dateAdd || new Date().toISOString().replace('T', ' ').substring(0, 19);
-  const xmlText = `<?xml version="1.0" encoding="UTF-8"?>
-<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
-    <order_state_update>
-        <id_order>${orderId}</id_order>
-        <id_order_state>${Number(newStateId)}</id_order_state>
-        <date_add><![CDATA[${dateStr}]]></date_add>
-    </order_state_update>
-</prestashop>`;
-  return postXml("order_state_update", xmlText);
+  return orders.map(parseOrder);
 };
 
 export const fetchOrderById = async (id) => {
@@ -71,84 +50,29 @@ export const fetchOrderById = async (id) => {
   return parseOrder(order);
 };
 
-export const deleteOrderById = async (id) => deleteOne(ressource, id);
-
-export const createOrderFromXml = async (xmlText) =>
-  postXml(ressource, xmlText);
-
-export const updateOrderDate = async (id, date) => {
-  const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
-  <order>
-    <id><![CDATA[${id}]]></id>
-    <date_add><![CDATA[${date} 00:00:00]]></date_add>
-  </order>
-</prestashop>`;
-
-  return patchXml(ressource, xml);
-};
-
-export const updateOrderHistoryDate = async (id, date) => {
-  const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
-  <order_history>
-    <id><![CDATA[${id}]]></id>
-    <date_add><![CDATA[${date} 00:00:00]]></date_add>
-  </order_history>
-</prestashop>`;
-
-  return patchXml("order_histories", xml);
-};
-
-export const updatePaymentDate = async (id, date) => {
-  const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
-  <order_payment>
-    <id><![CDATA[${id}]]></id>
-    <date_add><![CDATA[${date} 00:00:00]]></date_add>
-  </order_payment>
-</prestashop>`;
-
-  return patchXml("order_payments", xml);
-};
+// ─────────────────────────────────────────────
+// Création
+// ─────────────────────────────────────────────
 
 export const createOrder = async (row, cartId, customerId, addressId, items) => {
   const stateConfig = getOrderStateConfigFromLabel(row.etat);
-  if (!stateConfig) {
-    throw new Error(`Etat commande inconnu: ${row.etat}`);
-  }
+  if (!stateConfig) throw new Error(`Etat commande inconnu: ${row.etat}`);
 
   const totals = items.reduce(
     (acc, item) => {
-      acc.totalHt += item.unitPriceHt * item.quantity;
-      acc.totalTtc += item.unitPriceTtc * item.quantity;
+      const unitPriceHt = item.prixHT || item.unitPriceHt || 0;
+      const unitPriceTtc = item.prix || item.unitPriceTtc || 0;
+      acc.totalHt += unitPriceHt * item.quantity;
+      acc.totalTtc += unitPriceTtc * item.quantity;
       return acc;
     },
     { totalHt: 0, totalTtc: 0 },
   );
 
-  const orderRowsXml = items
-    .map(
-      (item) => `
-      <order_row>
-        <product_id><![CDATA[${item.productId}]]></product_id>
-        <product_attribute_id><![CDATA[${item.attributeId}]]></product_attribute_id>
-        <product_quantity><![CDATA[${item.quantity}]]></product_quantity>
-        <product_name><![CDATA[${item.label}]]></product_name>
-        <product_reference><![CDATA[${item.reference}]]></product_reference>
-        <product_price><![CDATA[${item.unitPriceHt.toFixed(4)}]]></product_price>
-        <unit_price_tax_incl><![CDATA[${item.unitPriceTtc.toFixed(4)}]]></unit_price_tax_incl>
-        <unit_price_tax_excl><![CDATA[${item.unitPriceHt.toFixed(4)}]]></unit_price_tax_excl>
-      </order_row>`,
-    )
-    .join("");
-
   const totalPaid = totals.totalTtc.toFixed(4);
-  const totalPaidReal =
-    stateConfig.paidReal === "TOTAL" ? totalPaid : stateConfig.paidReal;
+  const totalPaidReal = stateConfig.paidReal === "TOTAL" ? totalPaid : stateConfig.paidReal;
 
-  const isFinalState =
-    stateConfig.stateId === "5" || stateConfig.stateId === "6";
+  const isFinalState = stateConfig.stateId === "5" || stateConfig.stateId === "6";
   const initialStateId = isFinalState ? "2" : stateConfig.stateId;
   const initialValid = isFinalState ? 1 : stateConfig.valid;
   const initialPaidReal = isFinalState ? totalPaid : totalPaidReal;
@@ -185,22 +109,77 @@ export const createOrder = async (row, cartId, customerId, addressId, items) => 
     <conversion_rate><![CDATA[1.000000]]></conversion_rate>
     <round_mode><![CDATA[2]]></round_mode>
     <round_type><![CDATA[1]]></round_type>
-    <associations>
-      <order_rows>
-        ${orderRowsXml}
-      </order_rows>
-    </associations>
   </order>
 </prestashop>`;
 
-  const responseText = await requestXml("orders", {
-    method: "POST",
-    headers: { "Content-Type": "application/xml" },
-    body: xml,
-  });
-
-  const dom = parseXmlDoc(responseText);
-  const orderId = getTextContent(dom, "order > id");
+  const orderId = await postXml(ressource, xml);
 
   return { orderId, stateId: stateConfig.stateId, totalPaid };
 };
+
+// ─────────────────────────────────────────────
+// Mise à jour
+// ─────────────────────────────────────────────
+
+export const updateOrderState = async (id, newStateId) => {
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <order>
+    <id>${id}</id>
+    <current_state>${Number(newStateId)}</current_state>
+  </order>
+</prestashop>`;
+  return patchXml(`${ressource}/${id}`, xml);
+};
+
+export const updateOrderStateWithMovement = async (orderId, newStateId, dateAdd = null) => {
+  const dateStr = dateAdd || new Date().toISOString().replace("T", " ").substring(0, 19);
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <order_state_update>
+    <id_order><![CDATA[${orderId}]]></id_order>
+    <id_order_state><![CDATA[${Number(newStateId)}]]></id_order_state>
+    <date_add><![CDATA[${dateStr}]]></date_add>
+  </order_state_update>
+</prestashop>`;
+  return postXml("order_state_update", xml);
+};
+
+export const updateOrderDate = async (id, date) => {
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <order>
+    <id><![CDATA[${id}]]></id>
+    <date_add><![CDATA[${date} 00:00:00]]></date_add>
+  </order>
+</prestashop>`;
+  return patchXml(ressource, xml);
+};
+
+export const updateOrderHistoryDate = async (id, date) => {
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <order_history>
+    <id><![CDATA[${id}]]></id>
+    <date_add><![CDATA[${date} 00:00:00]]></date_add>
+  </order_history>
+</prestashop>`;
+  return patchXml("order_histories", xml);
+};
+
+export const updatePaymentDate = async (id, date) => {
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+  <order_payment>
+    <id><![CDATA[${id}]]></id>
+    <date_add><![CDATA[${date} 00:00:00]]></date_add>
+  </order_payment>
+</prestashop>`;
+  return patchXml("order_payments", xml);
+};
+
+// ─────────────────────────────────────────────
+// Suppression
+// ─────────────────────────────────────────────
+
+export const deleteOrderById = async (id) => deleteOne(ressource, id);

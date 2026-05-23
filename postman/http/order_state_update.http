@@ -1,0 +1,19 @@
+@webservice_url = http://localhost:70/prestashop
+@webservice_basic_auth = SFRXV1pBUUdTOTFMUUsyTkE2N0RCUzRMWjVFR1JORks6
+
+# NOTE: Set base64 auth in your client if needed.
+
+### Update order state with stock movement
+POST {{webservice_url}}/api/order_state_update
+Authorization: Basic {{webservice_basic_auth}}
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
+    <order_state_update>
+        <id_order>98</id_order>
+        <id_order_state>5</id_order_state>
+        <date_add><![CDATA[2026-05-09 00:00:00]]></date_add>
+    </order_state_update>
+</prestashop>
+

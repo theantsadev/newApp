@@ -42,7 +42,7 @@ const Produit = () => {
         ]) => {
           setProduit(produit);
           setCombinations(combinations);
-          
+
           if (produit?.id_tax_rules_group) {
             const rate = await fetchTaxRate(produit.id_tax_rules_group);
             setTaxRate(rate);
@@ -140,13 +140,12 @@ const Produit = () => {
       cart[existingIndex].quantity = Number(cart[existingIndex].quantity) + Number(quantity);
     } else {
       cart.push({
-        id_product: produit.id,
-        id_product_attribute: selectedCombination?.id ?? 0,
+        productId: produit.id,
+        attributeId: selectedCombination?.id ?? 0,
         quantity,
-        nom: produit.nom,
-        prix: prixAffiche,
-        prixHT: prixHT,
-        taxRate: taxRate,
+        unitPriceHt: Number(prixHT),
+        unitPriceTtc: Number(prixTTC),
+        label: produit.nom,
         reference: referenceAffichee,
       });
     }
