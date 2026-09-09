@@ -1,5 +1,5 @@
 import { requestXml, deleteOne, postXml, patchXml } from "./prestashopClient";
-import { parseXmlToJson, getValue } from "../shared/xmlUtils";
+import { parseXmlToJson, getValue, ensureArray } from "../shared/xmlUtils";
 import { fetchOrderList } from "./orderService";
 
 const CART_KEY = "prestashop_cart_key";
@@ -19,11 +19,7 @@ export const clearStoredCart = () => localStorage.removeItem(CART_KEY);
 
 export const parseCart = (cart) => {
   const cartRows = cart?.associations?.cart_rows?.cart_row;
-  const cartRowsList = Array.isArray(cartRows)
-    ? cartRows
-    : cartRows
-      ? [cartRows]
-      : [];
+  const cartRowsList = ensureArray(cartRows);
 
   return {
     id: getValue(cart.id),
@@ -61,8 +57,8 @@ export const parseCart = (cart) => {
 
 export const fetchCartList = async () => {
   const xmlText = await requestXml(`${ressource}?display=full`);
-  const carts = parseXmlToJson(xmlText)?.prestashop?.carts?.cart || [];
-  return carts.map(parseCart);
+  const carts = parseXmlToJson(xmlText)?.prestashop?.carts?.cart;
+  return ensureArray(carts).map(parseCart);
 };
 
 /** Retourne uniquement les paniers sans commande associée. */
@@ -88,14 +84,15 @@ export const createCart = async (customerId, addressId, items) => {
   const rowsXml = items.map((item) => {
     const id_product = item.productId || item.id_product;
     const id_product_attribute = item.attributeId || item.id_product_attribute;
-    `
+    return `
       <cart_row>
         <id_product><![CDATA[${id_product}]]></id_product>
         <id_product_attribute><![CDATA[${id_product_attribute}]]></id_product_attribute>
         <id_address_delivery><![CDATA[${addressId}]]></id_address_delivery>
         <id_customization><![CDATA[0]]></id_customization>
         <quantity><![CDATA[${item.quantity}]]></quantity>
-      </cart_row>`}).join("");
+      </cart_row>`;
+  }).join("");
 
   const deliveryOption = `{"${addressId}":"1,"}`;
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -121,6 +118,33 @@ export const createCart = async (customerId, addressId, items) => {
 </prestashop>`;
 
   return postXml(ressource, xml);
+};
+
+/**
+ * Calcule les totaux HT et TTC d'un panier en groupant par taux de TVA.
+ * Cette fonction est généralisée et unifiée pour tout le code (paniers et commandes).
+ */
+export const calculateCartTotals = (items) => {
+  if (!items || !Array.isArray(items)) {
+    return { totalHt: 0, totalTtc: 0, totalsByTax: {} };
+  }
+  let totalHt = 0;
+  let totalTtc = 0;
+
+  items.forEach((item) => {
+    const qty = Number(item.quantity) || 0;
+
+    // Supporte le mapping standard (unitPriceHt, unitPriceTtc) et l'ancien mapping (prixHT, prix)
+    const unitPriceHt = item.unitPriceHt !== undefined ? Number(item.unitPriceHt) : (item.prixHT !== undefined ? Number(item.prixHT) : 0);
+    const unitPriceTtc = item.unitPriceTtc !== undefined ? Number(item.unitPriceTtc) : (item.prix !== undefined ? Number(item.prix) : 0);
+    totalHt += unitPriceHt * qty;
+    totalTtc += unitPriceTtc * qty;
+  });
+
+  return {
+    totalHt: Number(totalHt.toFixed(4)), // Garder 4 décimales pour PrestaShop, formatable en 2 décimales pour l'affichage
+    totalTtc: Number(totalTtc.toFixed(4)),
+  };
 };
 
 export const updateCartDate = async (id, date) => {

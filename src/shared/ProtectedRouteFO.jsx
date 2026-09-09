@@ -3,7 +3,7 @@ import { isCustomerAuthenticated } from "./customerAuthStorage";
 
 const ProtectedRouteFO = ({ children }) => {
   if (!isCustomerAuthenticated()) {
-    return <Navigate to="/frontoffice/login" replace />;
+    return <Navigate to="/" replace />;
   }
   return children;
 };

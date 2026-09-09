@@ -42,6 +42,10 @@ export const getValue = (field) => {
     return field["#text"] || "";
 };
 
+/** Garantit un tableau, meme si l'API renvoie un seul objet. */
+export const ensureArray = (value) =>
+    Array.isArray(value) ? value : value ? [value] : [];
+
 /** Génère les balises <language> pour chaque id de langue. */
 export const buildLangXml = (languageIds, value) =>
     languageIds

@@ -1,5 +1,5 @@
 import { requestXml, deleteOne, postXml, fetchIdByFilter } from "./prestashopClient";
-import { parseXmlToJson, getValue, buildLangXml, slugify } from "../shared/xmlUtils";
+import { parseXmlToJson, getValue, buildLangXml, slugify, ensureArray } from "../shared/xmlUtils";
 import { getAuthHeader } from "../config/prestashop";
 
 const ressource = "products";
@@ -10,15 +10,11 @@ const ressource = "products";
 
 export const parseProduct = (product) => {
     const image = product.associations?.images?.image;
-    const imageNode = Array.isArray(image) ? image[0] : image;
+  const imageNode = ensureArray(image)[0];
 
     const optionValues =
         product.associations?.product_option_values?.product_option_value;
-    const optionValuesList = Array.isArray(optionValues)
-        ? optionValues
-        : optionValues
-            ? [optionValues]
-            : [];
+    const optionValuesList = ensureArray(optionValues);
 
     return {
         id:                   getValue(product.id),
@@ -76,8 +72,8 @@ export const getMarque = (date_disponibilite) => {
 
 export const fetchProductList = async () => {
     const xmlText = await requestXml(`${ressource}?display=full`);
-    const products = parseXmlToJson(xmlText)?.prestashop?.products?.product || [];
-    return products.map(parseProduct);
+  const products = parseXmlToJson(xmlText)?.prestashop?.products?.product;
+  return ensureArray(products).map(parseProduct);
 };
 
 export const fetchProductById = async (id) => {

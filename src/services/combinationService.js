@@ -1,5 +1,5 @@
 import { requestXml, deleteOne, postXml, patchXml } from "./prestashopClient";
-import { parseXmlToJson, getValue } from "../shared/xmlUtils";
+import { parseXmlToJson, getValue, ensureArray } from "../shared/xmlUtils";
 
 const ressource = "combinations";
 
@@ -10,11 +10,7 @@ const ressource = "combinations";
 export const parseCombination = (combination) => {
     const optionValues =
         combination.associations?.product_option_values?.product_option_value;
-    const optionValuesList = Array.isArray(optionValues)
-        ? optionValues
-        : optionValues
-            ? [optionValues]
-            : [];
+    const optionValuesList = ensureArray(optionValues);
 
     return {
         id:                 getValue(combination.id),
@@ -35,16 +31,19 @@ export const parseCombination = (combination) => {
 
 export const fetchCombinationList = async () => {
     const xmlText = await requestXml(`${ressource}?display=full`);
-    const combinations = parseXmlToJson(xmlText)?.prestashop?.combinations?.combination || [];
-    const arr = Array.isArray(combinations) ? combinations : [combinations];
-    return arr.map(parseCombination);
+    const combinations = parseXmlToJson(xmlText)?.prestashop?.combinations?.combination;
+    return ensureArray(combinations).map(parseCombination);
+};
+
+export const fetchAllCombinations = async () => {
+  const combinations = await fetchCombinationList();
+  return Object.fromEntries(combinations.map((os) => [os.id, os.reference]));
 };
 
 export const fetchCombinationsByProduct = async (productId) => {
     const xmlText = await requestXml(`${ressource}?filter[id_product]=[${productId}]&display=full`);
-    const items = parseXmlToJson(xmlText)?.prestashop?.combinations?.combination || [];
-    const arr = Array.isArray(items) ? items : [items];
-    return arr.map(parseCombination);
+    const items = parseXmlToJson(xmlText)?.prestashop?.combinations?.combination;
+    return ensureArray(items).map(parseCombination);
 };
 
 export const fetchCombinationById = async (id) => {

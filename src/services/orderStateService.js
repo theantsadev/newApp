@@ -1,5 +1,5 @@
 import { requestXml } from "./prestashopClient";
-import { parseXmlToJson, getValue } from "../shared/xmlUtils";
+import { parseXmlToJson, getValue, ensureArray } from "../shared/xmlUtils";
 
 const ressource = "order_states";
 
@@ -102,8 +102,8 @@ export const parseOrderState = (orderState) => ({
 
 export const fetchOrderStateList = async () => {
   const xmlText = await requestXml(`${ressource}?display=full`);
-  const orderStates = parseXmlToJson(xmlText)?.prestashop?.order_states?.order_state || [];
-  return orderStates.map(parseOrderState);
+  const orderStates = parseXmlToJson(xmlText)?.prestashop?.order_states?.order_state;
+  return ensureArray(orderStates).map(parseOrderState);
 };
 
 export const fetchOrderStateById = async (id) => {

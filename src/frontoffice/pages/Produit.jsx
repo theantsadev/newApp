@@ -7,6 +7,7 @@ import { fetchProductOptionValueList } from "../../services/productOptionValueSe
 import { getStoredCart, setStoredCart } from "../../services/cartService";
 import { fetchTaxRate } from "../../services/taxService";
 import { fetchStockAvailable } from "../../services/stockService";
+import AuthorizedImage from "../components/AuthorizedImage";
 
 const Produit = () => {
   const { id } = useParams();
@@ -133,20 +134,35 @@ const Produit = () => {
     e.preventDefault();
     const cart = JSON.parse(getStoredCart() || "[]");
     const existingIndex = cart.findIndex(
-      (item) => item.id_product === produit.id && item.id_product_attribute === (selectedCombination?.id ?? 0)
+      (item) => item.productId === produit.id && item.attributeId === (selectedCombination?.id ?? 0)
     );
 
     if (existingIndex >= 0) {
       cart[existingIndex].quantity = Number(cart[existingIndex].quantity) + Number(quantity);
     } else {
+      let label = produit.nom;
+      if (selectedCombination) {
+        const names = [];
+        optionsWithValues.forEach((opt) => {
+          const valId = selectedValues[opt.id];
+          const valObj = opt.valeurs.find((v) => Number(v.id) === Number(valId));
+          if (valObj) {
+            names.push(valObj.name);
+          }
+        });
+        if (names.length > 0) {
+          label += ` (variante : ${names.join(", ")})`;
+        }
+      }
+
       cart.push({
         productId: produit.id,
         attributeId: selectedCombination?.id ?? 0,
-        quantity,
-        unitPriceHt: Number(prixHT),
-        unitPriceTtc: Number(prixTTC),
-        label: produit.nom,
+        quantity: Number(quantity),
+        unitPriceHt: Math.round(prixHT * 100) / 100,
+        unitPriceTtc: Math.round(prixTTC * 100) / 100,
         reference: referenceAffichee,
+        label,
       });
     }
     setStoredCart(JSON.stringify(cart));
@@ -223,7 +239,7 @@ const Produit = () => {
           <tr>
             <th>Image</th>
             <td>
-              <img src={produit.image} alt="Sans image" />
+              <AuthorizedImage src={produit.image} alt="Sans image" />
             </td>
           </tr>
           <tr>

@@ -1,6 +1,7 @@
 import { requestXml, patchXml, deleteOne, postXml } from "./prestashopClient";
-import { parseXmlToJson, getValue, parseXmlDoc, getTextContent } from "../shared/xmlUtils";
+import { parseXmlToJson, getValue, parseXmlDoc, getTextContent, ensureArray } from "../shared/xmlUtils";
 import { getOrderStateConfigFromLabel } from "./orderStateService";
+import { calculateCartTotals } from "./cartService";
 
 const ressource = "orders";
 
@@ -10,7 +11,7 @@ const ressource = "orders";
 
 export const parseOrder = (order) => {
   const rows = order.associations?.order_rows?.order_row;
-  const rowsList = Array.isArray(rows) ? rows : rows ? [rows] : [];
+  const rowsList = ensureArray(rows);
 
   return {
     id: getValue(order.id),
@@ -40,8 +41,19 @@ export const parseOrder = (order) => {
 
 export const fetchOrderList = async () => {
   const xmlText = await requestXml(`${ressource}?display=full`);
-  const orders = parseXmlToJson(xmlText)?.prestashop?.orders?.order || [];
-  return orders.map(parseOrder);
+  const orders = parseXmlToJson(xmlText)?.prestashop?.orders?.order;
+  const orderList = ensureArray(orders);
+  return orderList.map(parseOrder);
+};
+
+export const fetchOrdersByCustomerId = async (customerId) => {
+  if (!customerId) return [];
+  const xmlText = await requestXml(
+    `${ressource}?display=full&filter[id_customer]=[${customerId}]`,
+  );
+  const orders = parseXmlToJson(xmlText)?.prestashop?.orders?.order;
+  const orderList = ensureArray(orders);
+  return orderList.map(parseOrder);
 };
 
 export const fetchOrderById = async (id) => {
@@ -58,16 +70,7 @@ export const createOrder = async (row, cartId, customerId, addressId, items) => 
   const stateConfig = getOrderStateConfigFromLabel(row.etat);
   if (!stateConfig) throw new Error(`Etat commande inconnu: ${row.etat}`);
 
-  const totals = items.reduce(
-    (acc, item) => {
-      const unitPriceHt = item.prixHT || item.unitPriceHt || 0;
-      const unitPriceTtc = item.prix || item.unitPriceTtc || 0;
-      acc.totalHt += unitPriceHt * item.quantity;
-      acc.totalTtc += unitPriceTtc * item.quantity;
-      return acc;
-    },
-    { totalHt: 0, totalTtc: 0 },
-  );
+  const totals = calculateCartTotals(items);
 
   const totalPaid = totals.totalTtc.toFixed(4);
   const totalPaidReal = stateConfig.paidReal === "TOTAL" ? totalPaid : stateConfig.paidReal;

@@ -1,5 +1,5 @@
 import { requestXml, postXml, fetchIdByFilter, fetchIdByFilters } from "./prestashopClient";
-import { parseXmlToJson, getValue, buildLangXml } from "../shared/xmlUtils";
+import { parseXmlToJson, getValue, buildLangXml, ensureArray } from "../shared/xmlUtils";
 
 // ─────────────────────────────────────────────
 // Configuration & constantes
@@ -37,7 +37,7 @@ export const fetchTaxRate = async (idTaxRulesGroup) => {
     try {
         const rulesXml = await requestXml(`tax_rules?display=full&filter[id_tax_rules_group]=${idTaxRulesGroup}`);
         const rules = parseXmlToJson(rulesXml)?.prestashop?.tax_rules?.tax_rule;
-        const first = Array.isArray(rules) ? rules[0] : rules;
+        const first = ensureArray(rules)[0];
         const idTax = first ? parseTaxRule(first).id_tax : null;
         if (!idTax) return 0;
 

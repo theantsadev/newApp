@@ -41,21 +41,7 @@ const StatistiquesParCategorie = () => {
         setCategories(catData);
         setProducts(prodData);
         setOrders(orderData);
-        console.log("Stocks bruts:", stockData);
         setStocks(stockData);
-        // Cherche un produit qui a des variantes
-        const grouped = {};
-        stockData.forEach((s) => {
-          if (!grouped[s.productId]) grouped[s.productId] = [];
-          grouped[s.productId].push(s);
-        });
-        const withVariants = Object.entries(grouped).filter(
-          ([, arr]) => arr.length > 1,
-        );
-        console.log(
-          "Produits multi-entrées (variantes):",
-          withVariants.slice(0, 3),
-        );
       } catch (err) {
         if (!isActive) return;
         setError(err);
@@ -86,7 +72,7 @@ const StatistiquesParCategorie = () => {
     productMap[String(p.id)] = p;
   });
 
-  
+
   const categoryMap = {}; // id -> categoryName
   categories.forEach((c) => {
     categoryMap[String(c.id)] = c.nom || "Sans nom";
@@ -160,30 +146,27 @@ const StatistiquesParCategorie = () => {
     };
   });
 
-  // Sum available stocks
-  // ✅ Après — construire d'abord un Set des produits qui ont des variantes
-  const productsWithVariants = new Set(
-    stocks.filter((s) => s.attributeId !== "0").map((s) => s.productId),
-  );
+
 
   stocks.forEach((s) => {
-    // Si ce produit a des variantes, ignorer la ligne agrégée (attributeId "0")
-    if (s.attributeId === "0" && productsWithVariants.has(s.productId)) return;
+    // Si ce produit a des variantes, ignorer la ligne agrégée (attributeId "0") pour éviter de compter en double la quantité disponible
+    if (s.attributeId === "0" || s.attributeId === "") {
+      console.log(s);
+      const prodId = String(s.productId);
+      const product = productMap[prodId];
+      const categoryId = product ? String(product.id_category_default) : "1";
 
-    const prodId = String(s.productId);
-    const product = productMap[prodId];
-    const categoryId = product ? String(product.id_category_default) : "1";
-
-    if (!stockByCategory[categoryId]) {
-      stockByCategory[categoryId] = {
-        id: categoryId,
-        name: categoryMap[categoryId] || "Autre",
-        availableQty: 0,
-        reservedQty: 0,
-        physicalQty: 0,
-      };
+      if (!stockByCategory[categoryId]) {
+        stockByCategory[categoryId] = {
+          id: categoryId,
+          name: categoryMap[categoryId] || "Autre",
+          availableQty: 0,
+          reservedQty: 0,
+          physicalQty: 0,
+        };
+      }
+      stockByCategory[categoryId].availableQty += Number(s.quantity) || 0;
     }
-    stockByCategory[categoryId].availableQty += s.quantity || 0;
   });
 
   // Sum reserved stocks (from orders with state = 2)

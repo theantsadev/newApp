@@ -2,6 +2,7 @@ import {
   getStoredCart,
   setStoredCart,
   clearStoredCart,
+  calculateCartTotals,
 } from "../../services/cartService";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -12,7 +13,7 @@ const Panier = () => {
   const [customer, setCustomer] = useState(null);
   const navigate = useNavigate();
 
-  const getItemKey = (item) => `${item.id_product}_${item.id_product_attribute}`;
+  const getItemKey = (item) => `${item.productId}_${item.attributeId}`;
 
   useEffect(() => {
     setCustomer(getStoredCustomer());
@@ -59,18 +60,7 @@ const Panier = () => {
     updateCart(newCart);
   };
 
-  const totalsByTax = cart.reduce((acc, item) => {
-    const tax = Number(item.taxRate) || 0;
-    const ht = Number(item.prixHT) || (Number(item.prix) / (1 + tax / 100));
-    if (!acc[tax]) acc[tax] = 0;
-    acc[tax] += ht * Number(item.quantity);
-    return acc;
-  }, {});
-
-  let totalTtc = 0;
-  for (const tax in totalsByTax) {
-    totalTtc += totalsByTax[tax] * (1 + Number(tax) / 100);
-  }
+  const { totalTtc } = calculateCartTotals(cart);
   const totalPrix = totalTtc.toFixed(2);
 
   return (
@@ -90,12 +80,12 @@ const Panier = () => {
             {cart.map((item) => (
               <li key={getItemKey(item)} style={styles.card}>
                 <div style={styles.itemInfo}>
-                  <strong style={styles.itemName}>{item.nom}</strong>
+                  <strong style={styles.itemName}>{item.label}</strong>
                   <span style={styles.itemRef}>Réf: {item.reference || "—"}</span>
                 </div>
                 
                 <div style={styles.itemPrice}>
-                  {Number(item.prix).toFixed(2)} EUR
+                  {Number(item.unitPriceTtc).toFixed(2)} EUR
                 </div>
 
                 <div style={styles.quantityControls}>

@@ -14,8 +14,9 @@ import { updateStock } from "../../services/stockService";
 import { ensureCustomer } from "../../services/customerService";
 import { ensureAddress } from "../../services/addressService";
 import { createCart, updateCartDate } from "../../services/cartService";
-import { createOrder, updateOrderDate, updatePaymentDate, updateOrderStateWithMovement } from "../../services/orderService";
+import { updateOrderDate, updatePaymentDate, updateOrderStateWithMovement } from "../../services/orderService";
 import { isCartOrderStateLabel } from "../../services/orderStateService";
+import { processOrderCreation } from "../../services/checkoutService";
 
 const REQUIRED_HEADERS = {
   produits: [
@@ -360,10 +361,11 @@ const ImportData = () => {
       const commandesData = parsed.commandes;
 
 
-      // date_availability_produit	nom	reference	prix_ttc	Taxe	categorie	prix_achat
+    
 
 
       const productsByRef = {};
+
       const productHasCombi = {};
 
       declinaisonsData.forEach((row) => {
@@ -516,6 +518,7 @@ const ImportData = () => {
           product?.availableDate ||
           toIsoDate(row.date_availability_produit) ||
           new Date().toISOString().split("T")[0];
+        console.log(dateAdd)
 
         await updateStock(productId, attributeId, quantity, dateAdd);
         appendLog(
@@ -604,55 +607,18 @@ const ImportData = () => {
         });
 
         const date = toIsoDate(row.date);
-        const cartId = await createCart(customerId, addressId, items);
-        appendLog(
-          `Panier (Cart) cree: ID ${cartId} pour le client ${customerId}`,
-        );
+        const result = await processOrderCreation({
+          customer: { id: customerId },
+          addressId,
+          cartItems: items,
+          existingCartId: null,
+          orderStateLabel: row.etat,
+          date,
+          callback: appendLog,
+        });
 
-        await updateCartDate(cartId, date);
 
-        if (!isCartOrderStateLabel(row.etat)) {
-          const order = await createOrder(
-            row,
-            cartId,
-            customerId,
-            addressId,
-            items,
-          );
-          const reference = await requestXml(
-            `orders/${order.orderId}?display=[reference]`,
-          ).then((text) => {
-            const dom = parseXmlDoc(text);
-            return getTextContent(dom, "order > reference");
-          });
 
-          appendLog(
-            `Commande creee: ${reference} (ID: ${order.orderId}, Etat initial: ${order.stateId})`,
-          );
-
-          const orderPaymentId = await fetchIdByFilter(
-            "order_payments",
-            "order_payment",
-            "order_reference",
-            reference,
-          );
-          await updateOrderDate(order.orderId, date);
-          await updateOrderStateWithMovement(
-            order.orderId,
-            order.stateId,
-            date + " 00:00:00",
-          );
-
-          if (orderPaymentId) {
-            await updatePaymentDate(orderPaymentId, date);
-          } else {
-            appendLog(`Aucun paiement trouve pour la commande ${reference}`);
-          }
-        } else {
-          appendLog(
-            `La ligne du panier ${cartId} reste à l'état "${row.etat}" (aucune commande générée)`,
-          );
-        }
 
         // order_history et order_payment sont gérés automatiquement par PrestaShop
         // grâce à l'ajout de <current_state> et <total_paid_real> lors du POST.

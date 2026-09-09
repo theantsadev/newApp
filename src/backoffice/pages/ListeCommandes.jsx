@@ -11,13 +11,12 @@ import {
   MANAGED_ORDER_STATE_IDS,
   MANAGED_STATE_LABELS,
 } from "../../services/orderStateService";
-import {
-  deleteCartById,
-  fetchUnlinkedCartList,
-} from "../../services/cartService";
+import { deleteCartById, fetchUnlinkedCartList } from "../../services/cartService";
 import { fetchCustomerList, fetchCustomerById } from "../../services/customerService";
 import { fetchAddressesByCustomerId } from "../../services/addressService";
-import { processOrderCreation } from "../../services/checkoutService";
+import { processOrderCreation, enrichCartItems } from "../../services/checkoutService";
+import { runWithConcurrency } from "../../shared/concurrency";
+
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -446,7 +445,7 @@ const ListeCommandes = () => {
     )
       return;
     try {
-      await Promise.all(commandes.map((p) => deleteOrderById(p.id)));
+      await runWithConcurrency(commandes, (p) => deleteOrderById(p.id));
       setCommandes([]);
       showSuccess("Toutes les commandes ont été supprimées");
     } catch (err) {
@@ -472,7 +471,7 @@ const ListeCommandes = () => {
     )
       return;
     try {
-      await Promise.all(carts.map((c) => deleteCartById(c.id)));
+      await runWithConcurrency(carts, (c) => deleteCartById(c.id));
       setCarts([]);
       showSuccess("Tous les paniers ont été supprimés");
     } catch (err) {
@@ -495,10 +494,12 @@ const ListeCommandes = () => {
         }
       }
 
+      const enrichedItems = await enrichCartItems(cartItem.rawCart.cart_row_ids);
+
       await processOrderCreation({
         customer,
         addressId,
-        cartItems: cartItem.rawCart.cart_row_ids,
+        cartItems: enrichedItems,
         existingCartId: cartItem.rawCart.id,
       });
 

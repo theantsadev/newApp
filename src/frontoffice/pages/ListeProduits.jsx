@@ -8,6 +8,9 @@ import {
 import { fetchTaxRate } from "../../services/taxService";
 // Ajoute cet import en haut du fichier
 import { fetchCategoryList } from "../../services/categoryService";
+import AuthorizedImage from "../components/AuthorizedImage";
+import { verifyApiKey } from "../../shared/authStorage";
+import LoginStock from "../components/LoginStock";
 
 // --- Fonctions utilitaires ---
 
@@ -27,6 +30,7 @@ const normalize = (value) => {
     .toLowerCase()
     .trim();
 };
+
 
 // Récupère toutes les catégories uniques depuis la liste de produits
 const getCategoriesUniques = (produits) => {
@@ -179,7 +183,7 @@ function ProduitCard({ produit, onDelete }) {
   return (
     <div style={styles.card}>
       {produit.image && (
-        <img
+        <AuthorizedImage
           src={produit.image}
           alt={produit.nom || "Produit"}
           style={styles.image}
@@ -232,6 +236,7 @@ const ListeProduits = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [filtre, setFiltre] = useState(FILTRE_VIDE);
+  const [canOpenPopup, setCanOpenPopup] = useState(false);
 
   // Chargement initial
   useEffect(() => {
@@ -260,6 +265,8 @@ const ListeProduits = () => {
           p.categorie = categorie ? categorie.nom : "Sans catégorie";
           return p;
         });
+
+        if (!isActive) return;
 
         setProduits(productsWithCategory);
         setFiltered(productsWithCategory);
@@ -316,6 +323,27 @@ const ListeProduits = () => {
     }
   };
 
+  const closeModal = () => {
+    setCanOpenPopup(false);
+  };
+
+
+  const handleRemoveStock = async () => {
+    const mdp = prompt("Entrer le mot de passe admin");
+    if (!mdp) {
+      setError({ message: "Clé requise." });
+      return;
+    }
+
+    if (!verifyApiKey(mdp)) {
+      setError({ message: "Clé invalide." });
+      return;
+    }
+
+    setCanOpenPopup(true);
+
+  };
+
   const categories = getCategoriesUniques(produits);
 
   // --- Rendu ---
@@ -330,7 +358,18 @@ const ListeProduits = () => {
         <button onClick={handleDeleteAll} style={styles.buttonDanger}>
           Tout supprimer
         </button>
+        <button onClick={handleRemoveStock} style={styles.buttonDanger}>
+          Remove stock
+        </button>
       </div>
+
+      {canOpenPopup && (
+        <LoginStock
+          canOpenPopup={canOpenPopup}
+          onClose={closeModal}
+
+        />
+      )}
 
       <FilterForm
         filtre={filtre}

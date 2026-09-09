@@ -36,7 +36,7 @@ const Login = () => {
     }
 
     setStoredApiKey(cleaned);
-    const redirectTo = location.state?.from?.pathname || "backoffice/dashboard";
+    const redirectTo = location.state?.from?.pathname || "/backoffice/dashboard";
     navigate(redirectTo, { replace: true });
   };
 

@@ -1,5 +1,5 @@
 import { requestXml, postXml, fetchIdByFilter } from "./prestashopClient";
-import { parseXmlToJson, getValue } from "../shared/xmlUtils";
+import { parseXmlToJson, getValue, ensureArray } from "../shared/xmlUtils";
 
 const ressource = "customers";
 
@@ -20,8 +20,8 @@ export const parseCustomer = (customer) => ({
 
 export const fetchCustomerList = async () => {
     const xmlText = await requestXml(`${ressource}?display=full`);
-    const customers = parseXmlToJson(xmlText)?.prestashop?.customers?.customer || [];
-    return customers.map(parseCustomer);
+    const customers = parseXmlToJson(xmlText)?.prestashop?.customers?.customer;
+    return ensureArray(customers).map(parseCustomer);
 };
 
 export const fetchCustomerByEmail = async (email) => {
@@ -29,7 +29,7 @@ export const fetchCustomerByEmail = async (email) => {
     const customers = parseXmlToJson(xmlText)?.prestashop?.customers?.customer;
     if (!customers) return null;
 
-    const customerList = Array.isArray(customers) ? customers : [customers];
+    const customerList = ensureArray(customers);
     return customerList.length > 0 ? parseCustomer(customerList[0]) : null;
 };
 

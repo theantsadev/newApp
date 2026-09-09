@@ -1,5 +1,5 @@
 import { requestXml, deleteOne, postXml, patchXml, fetchIdByFilter } from "./prestashopClient";
-import { parseXmlToJson, getValue, buildLangXml } from "../shared/xmlUtils";
+import { parseXmlToJson, getValue, buildLangXml, ensureArray } from "../shared/xmlUtils";
 
 const ressource = "product_option_values";
 
@@ -19,17 +19,15 @@ export const parseProductOptionValue = (v) => ({
 
 export const fetchProductOptionValueList = async () => {
     const xmlText = await requestXml(`${ressource}?display=full`);
-    const values = parseXmlToJson(xmlText)?.prestashop?.product_option_values?.product_option_value || [];
-    const arr = Array.isArray(values) ? values : [values];
-    return arr.map(parseProductOptionValue);
+  const values = parseXmlToJson(xmlText)?.prestashop?.product_option_values?.product_option_value;
+  return ensureArray(values).map(parseProductOptionValue);
 };
 
 export const fetchProductOptionValueByIds = async (ids) => {
     const filter = ids.map((id) => `[${id}]`).join(",");
     const xmlText = await requestXml(`${ressource}?filter[id]=${filter}&display=full`);
-    const values = parseXmlToJson(xmlText)?.prestashop?.product_option_values?.product_option_value || [];
-    const arr = Array.isArray(values) ? values : [values];
-    return arr.map(parseProductOptionValue);
+  const values = parseXmlToJson(xmlText)?.prestashop?.product_option_values?.product_option_value;
+  return ensureArray(values).map(parseProductOptionValue);
 };
 
 export const fetchProductOptionValueById = async (id) => {

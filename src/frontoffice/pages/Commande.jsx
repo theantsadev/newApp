@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   getStoredCart,
   clearStoredCart,
+  calculateCartTotals,
 } from "../../services/cartService";
 import { getStoredCustomer } from "../../shared/customerAuthStorage";
 import { fetchAddressesByCustomerId } from "../../services/addressService";
@@ -46,31 +47,7 @@ const Commande = () => {
     }
   }, [navigate]);
 
-  const totalsByTax = cart.reduce((acc, item) => {
-    // Normalize possible item shapes (old: prix/prixHT/taxRate, new: unitPriceHt/unitPriceTtc)
-    const tax =
-      item.taxRate != null
-        ? Number(item.taxRate)
-        : 0;
-
-    const unitPriceHt =
-      item.unitPriceHt != null
-        ? Number(item.unitPriceHt)
-        : item.prixHT != null
-          ? Number(item.prixHT)
-          : item.prix != null
-            ? Number(item.prix) / (1 + (item.taxRate || 0) / 100)
-            : 0;
-
-    if (!acc[tax]) acc[tax] = 0;
-    acc[tax] += unitPriceHt * Number(item.quantity);
-    return acc;
-  }, {});
-
-  let totalTtc = 0;
-  for (const tax in totalsByTax) {
-    totalTtc += totalsByTax[tax] * (1 + Number(tax) / 100);
-  }
+  const { totalTtc } = calculateCartTotals(cart);
   const totalPrix = totalTtc.toFixed(2);
 
   const handleValidation = async () => {
@@ -120,20 +97,11 @@ const Commande = () => {
 
       <h2>Vos articles</h2>
       <ul>
-        {cart.map((item, index) => {
-          const label = item.label || item.nom || item.reference || "Article";
-          const unitTtc =
-            item.unitPriceTtc != null
-              ? Number(item.unitPriceTtc)
-              : item.prix != null
-                ? Number(item.prix)
-                : (Number(item.unitPriceHt || item.prixHT || 0) * (1 + (Number(item.taxRate) || 0) / 100));
-          return (
-            <li key={index}>
-              <strong>{label}</strong> - {item.quantity} x {unitTtc.toFixed(2)} EUR
-            </li>
-          );
-        })}
+        {cart.map((item, index) => (
+          <li key={index}>
+            <strong>{item.label}</strong> - {item.quantity} x {Number(item.unitPriceTtc).toFixed(2)} EUR
+          </li>
+        ))}
       </ul>
 
       <h3>Sous-total : {totalPrix} EUR</h3>

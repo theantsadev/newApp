@@ -1,5 +1,5 @@
 import { requestXml, postXml } from "./prestashopClient";
-import { parseXmlToJson, getValue } from "../shared/xmlUtils";
+import { parseXmlToJson, getValue, ensureArray } from "../shared/xmlUtils";
 
 const ressource = "addresses";
 
@@ -31,7 +31,7 @@ export const fetchAddressesByCustomerId = async (idCustomer) => {
     const addresses = parseXmlToJson(xmlText)?.prestashop?.addresses?.address;
     if (!addresses) return [];
 
-    const addressList = Array.isArray(addresses) ? addresses : [addresses];
+  const addressList = ensureArray(addresses);
     return addressList.map(parseAddress);
 };
 

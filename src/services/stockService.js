@@ -1,5 +1,5 @@
 import { patchXml, postXml, requestXml } from "./prestashopClient";
-import { parseXmlToJson, getValue } from "../shared/xmlUtils";
+import { parseXmlToJson, getValue, ensureArray } from "../shared/xmlUtils";
 
 // ─────────────────────────────────────────────
 // Helpers internes
@@ -22,25 +22,25 @@ const formatDateNow = () => {
 // ─────────────────────────────────────────────
 
 const parseStockAvailable = (item, fallback = {}) => ({
-    id:          getValue(item.id),
-    productId:   getValue(item.id_product)           || String(fallback.productId   ?? ""),
+    id: getValue(item.id),
+    productId: getValue(item.id_product) || String(fallback.productId ?? ""),
     attributeId: getValue(item.id_product_attribute) || String(fallback.attributeId ?? ""),
-    quantity:    Number(getValue(item.quantity) || 0),
-    updatedAt:   getValue(item.date_upd),
+    quantity: Number(getValue(item.quantity) || 0),
+    updatedAt: getValue(item.date_upd),
 });
 
 const parseStockMovement = (item) => {
     const physicalQuantity = Number(getValue(item.physical_quantity) || 0);
-    const sign             = Number(getValue(item.sign) || 1);
-    const dateAdd          = getValue(item.date_add);
+    const sign = Number(getValue(item.sign) || 1);
+    const dateAdd = getValue(item.date_add);
     return {
-        id:          getValue(item.id),
-        productId:   Number(getValue(item.id_product)),
+        id: getValue(item.id),
+        productId: Number(getValue(item.id_product)),
         attributeId: Number(getValue(item.id_product_attribute)),
-        stockId:     Number(getValue(item.id_stock)),
-        delta:       physicalQuantity * sign,
+        stockId: Number(getValue(item.id_stock)),
+        delta: physicalQuantity * sign,
         dateAdd,
-        date:        dateAdd.split(" ")[0], // YYYY-MM-DD
+        date: dateAdd.split(" ")[0], // YYYY-MM-DD
     };
 };
 
@@ -51,9 +51,8 @@ const parseStockMovement = (item) => {
 export const fetchStockAvailableList = async () => {
     try {
         const xmlText = await requestXml("stock_availables?display=full");
-        const items = parseXmlToJson(xmlText)?.prestashop?.stock_availables?.stock_available || [];
-        const arr = Array.isArray(items) ? items : [items];
-        return arr.map((item) => parseStockAvailable(item));
+        const items = parseXmlToJson(xmlText)?.prestashop?.stock_availables?.stock_available;
+        return ensureArray(items).map((item) => parseStockAvailable(item));
     } catch (err) {
         console.error("Failed to fetch stock availables list:", err);
         return [];
@@ -67,8 +66,8 @@ export const fetchStockAvailable = async (productId, attributeId = 0) => {
     const item = parseXmlToJson(xmlText)?.prestashop?.stock_availables?.stock_available;
     if (!item) return null;
 
-    const single = Array.isArray(item) ? item[0] : item;
-    return parseStockAvailable(single, { productId, attributeId });
+    const single = ensureArray(item)[0];
+    return single ? parseStockAvailable(single, { productId, attributeId }) : null;
 };
 
 export const getAllStockMovementsByProduct = async (productId, attributeId) => {
@@ -77,10 +76,9 @@ export const getAllStockMovementsByProduct = async (productId, attributeId) => {
 
     try {
         const xmlText = await requestXml(`stock_movements?filter[id_stock]=[${stock.id}]&display=full`);
-        const items = parseXmlToJson(xmlText)?.prestashop?.stock_movements?.stock_mvt || [];
-        const arr = Array.isArray(items) ? items : [items];
-
-        const movements = arr.map(parseStockMovement);
+        const items = parseXmlToJson(xmlText)?.prestashop?.stock_mvts?.stock_mvt;
+        console.log("Retrieved stock movements:", items);
+        const movements = ensureArray(items).map(parseStockMovement);
         movements.sort((a, b) => a.dateAdd.localeCompare(b.dateAdd));
 
         // Reconstruit la quantité courante après chaque mouvement
@@ -90,6 +88,7 @@ export const getAllStockMovementsByProduct = async (productId, attributeId) => {
             runningQuantity += m.delta;
             m.quantityAfter = runningQuantity;
         });
+        console.log(stock.id)
 
         return movements;
     } catch (err) {
@@ -103,10 +102,10 @@ export const getAllStockMovementsByProduct = async (productId, attributeId) => {
 // ─────────────────────────────────────────────
 
 const postStockMovement = async (stockId, productId, attributeId, delta, dateAdd = null) => {
-    const sign     = delta > 0 ? 1 : -1;
+    const sign = delta > 0 ? 1 : -1;
     const reasonId = delta > 0 ? 1 : 2; // 1 = Augmentation, 2 = Diminution
     const quantity = Math.abs(delta);
-    const date     = dateAdd ?? formatDateNow();
+    const date = dateAdd ?? formatDateNow();
 
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
@@ -129,7 +128,8 @@ const postStockMovement = async (stockId, productId, attributeId, delta, dateAdd
 };
 
 export const applyStockDelta = async (productId, attributeId, delta) => {
-   const stock = await updateStock(productId, attributeId, delta, formatDateNow());
+    const stock = await fetchStockAvailable(productId, attributeId);
+    await updateStock(productId, attributeId, Math.max(0, Number(stock.quantity || 0) + Number(delta)), formatDateNow());
 
     try {
         const updatedStock = await fetchStockAvailable(productId, attributeId);
@@ -143,7 +143,12 @@ export const applyStockDelta = async (productId, attributeId, delta) => {
 
 export const updateStock = async (productId, combinationId, quantity, dateAdd) => {
     const stock = await fetchStockAvailable(productId, combinationId);
+
     if (!stock?.id) return;
+
+    const previousQuantity = Number(stock.quantity || 0);
+    const nextQuantity = Number(quantity || 0);
+    const delta = nextQuantity - previousQuantity;
 
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <prestashop xmlns:xlink="http://www.w3.org/1999/xlink">
@@ -159,9 +164,9 @@ export const updateStock = async (productId, combinationId, quantity, dateAdd) =
 
     await patchXml("stock_availables", xml);
 
-    if (quantity > 0 && dateAdd) {
+    if (delta !== 0 && dateAdd) {
         const fullDate = dateAdd.length === 10 ? `${dateAdd} 00:00:00` : dateAdd;
-        await postStockMovement(stock.id, productId, combinationId, quantity, fullDate);
+        await postStockMovement(stock.id, productId, combinationId, delta, fullDate);
     }
     return stock;
 };

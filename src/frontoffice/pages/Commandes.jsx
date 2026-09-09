@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fetchOrderList } from "../../services/orderService";
+import { fetchOrdersByCustomerId } from "../../services/orderService";
 import { fetchOrderStateList } from "../../services/orderStateService";
 import { useNavigate } from "react-router-dom";
 import {
@@ -7,157 +7,201 @@ import {
   clearStoredCustomer,
 } from "../../shared/customerAuthStorage";
 import { fetchCartById } from "../../services/cartService";
-import { buildXmlFromJson } from "../../shared/xmlUtils";
+import {
+  enrichCartItems,
+  processOrderCreation,
+} from "../../services/checkoutService";
+import { fetchAddressesByCustomerId } from "../../services/addressService";
+import DuplicateOrderModal from "../components/DuplicateOrderModal";
 
 const Commandes = () => {
+  const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
   const [states, setStates] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [customer, setCustomer] = useState(null);
-  const navigate = useNavigate();
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [quantity, setQuantity] = useState(1);
+  const [address, setAddress] = useState(null);
+  const [enrichedCart, setEnrichedCart] = useState([]);
 
+  const reloadOrdersForCustomer = async (customerId) => {
+    const orderList = await fetchOrdersByCustomerId(customerId);
+    const myOrders = orderList.sort(
+      (a, b) => new Date(b.date_add) - new Date(a.date_add),
+    );
+    setOrders(myOrders);
+  };
+
+  const openModal = async (order) => {
+    const currentQuantity = 1;
+    setError(null);
+
+    try {
+      const cart = await fetchCartById(order.id_cart);
+      const rows = Array.isArray(cart?.cart_row_ids) ? cart.cart_row_ids : [];
+      const scaledRows = rows.map((row) => ({
+        ...row,
+        quantity: Number(row.quantity) * currentQuantity,
+      }));
+
+      const items = await enrichCartItems(scaledRows);
+      console.log("enrichedCart sample:", JSON.stringify(items[0], null, 2));
+      setSelectedOrder(order);
+      setQuantity(currentQuantity);
+      setEnrichedCart(items);
+
+    } catch (err) {
+      setError(err.message || "Impossible de preparer la duplication.");
+    }
+  };
+
+  const closeModal = () => {
+    setSelectedOrder(null);
+    setQuantity(1);
+    setEnrichedCart([]);
+  };
+
+  const handleDuplicateSubmit = async () => {
+    if (!selectedOrder || !customer || !address) {
+      setError("Informations manquantes pour dupliquer la commande.");
+      return;
+    }
+
+    try {
+      setError(null);
+
+
+      const cartItems = enrichedCart.map((item) => ({
+        ...item,
+        quantity: Number(item.quantity) * Number(quantity),
+      }));
+
+      await processOrderCreation({
+        customer,
+        addressId: address.id,
+        cartItems,
+        orderStateLabel: "livré",
+      });
+
+      await reloadOrdersForCustomer(customer.id);
+      closeModal();
+    } catch (err) {
+      setError(err.message || "Erreur lors de la duplication de la commande.");
+    }
+  };
 
   useEffect(() => {
-    const storedCustomer = getStoredCustomer();
-    if (!storedCustomer) {
-      navigate("/frontoffice/login");
-      return;
-    }
-    setCustomer(storedCustomer);
+    const loadData = async () => {
+      const storedCustomer = getStoredCustomer();
 
-    if (storedCustomer.isAnonymous) {
-      setLoading(false);
-      return;
-    }
+      if (!storedCustomer) {
+        navigate("/frontoffice/login");
+        return;
+      }
 
-    Promise.all([fetchOrderList(), fetchOrderStateList()])
-      .then(([orderList, stateList]) => {
-        // Filtrer pour le client authentifié
-        const myOrders = orderList.filter(
-          (o) => Number(o.id_customer) === Number(storedCustomer.id),
+      setCustomer(storedCustomer);
+
+      if (storedCustomer.isAnonymous) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        setError(null);
+
+        const [orderList, stateList, addresses] = await Promise.all([
+          fetchOrdersByCustomerId(storedCustomer.id),
+          fetchOrderStateList(),
+          fetchAddressesByCustomerId(storedCustomer.id),
+        ]);
+
+        const myOrders = orderList.sort(
+          (a, b) => new Date(b.date_add) - new Date(a.date_add),
         );
 
-        // Trier du plus récent au plus ancien
-        myOrders.sort((a, b) => new Date(b.date_add) - new Date(a.date_add));
+        const stateMap = Object.fromEntries(
+          stateList.map((state) => [state.id, state.name]),
+        );
 
         setOrders(myOrders);
-
-        const stylesMap = {};
-        stateList.forEach((s) => {
-          stylesMap[s.id] = s.name;
-        });
-        setStates(stylesMap);
-
+        setStates(stateMap);
+        setAddress(addresses[0] || null);
+      } catch (err) {
+        setError(err.message || "Erreur lors du chargement des commandes.");
+      } finally {
         setLoading(false);
-      })
-      .catch((err) => {
-        setError(err);
-        setLoading(false);
-      });
+      }
+    };
+
+    loadData();
   }, [navigate]);
 
-  if (customer?.isAnonymous) {
-    return (
-      <div
-        style={{
-          padding: "2rem",
-          border: "1px solid var(--border)",
-          borderRadius: "12px",
-          background: "var(--code-bg)",
-          textAlign: "center",
-          margin: "2rem auto",
-          maxWidth: "600px",
-        }}
-      >
-        <h2 style={{ color: "var(--accent)", marginTop: 0 }}>
-          📋 Mes Commandes
-        </h2>
-        <p style={{ margin: "1rem 0", color: "var(--text-h)" }}>
-          Vous êtes actuellement connecté en mode <strong>Anonyme</strong>.
-        </p>
-        <p style={{ margin: "1rem 0", color: "var(--text)" }}>
-          Les utilisateurs anonymes n'ont pas d'historique de commandes.
-        </p>
-        <button
-          onClick={() => navigate("/")}
-          style={{
-            background: "var(--accent)",
-            color: "#fff",
-            border: "none",
-            padding: "10px 20px",
-            borderRadius: "8px",
-            fontWeight: "600",
-            cursor: "pointer",
-            marginTop: "1rem",
-          }}
-        >
-          Choisir un compte client
-        </button>
-      </div>
-    );
-  }
 
-  if (loading) return <div>Chargement de vos commandes...</div>;
-  if (error) return <div>Erreur : {error.message}</div>;
-
-  const handleLogout = () => {
-    clearStoredCustomer();
-    navigate("/");
-  };
 
   return (
     <div>
+      {selectedOrder && (
+        <DuplicateOrderModal
+          selectedOrder={selectedOrder}
+          quantity={quantity}
+          onQuantityChange={setQuantity}
+          onClose={closeModal}
+          onConfirm={handleDuplicateSubmit}
+          enrichedCart={enrichedCart}
+        />
+      )}
+
       <div
         style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
+          marginBottom: "1rem",
         }}
       >
-        <h1>Mes Commandes</h1>
-        <div>
-          <span>
-            Connecté en tant que : {customer?.firstname}{" "}
-            {customer?.lastname}{" "}
-          </span>
-          <button onClick={handleLogout}>Se déconnecter</button>
-        </div>
+        <h1>Mes commandes</h1>
       </div>
-      {orders.length === 0 ? (
-        <p>Vous n'avez passé aucune commande pour le moment.</p>
-      ) : (
+
+      {loading && <p>Chargement...</p>}
+      {!loading && error && <p style={{ color: "#c00" }}>{error}</p>}
+
+      {!loading && !error && orders.length === 0 && (
+        <p>Vous n'avez passe aucune commande pour le moment.</p>
+      )}
+
+      {!loading && !error && orders.length > 0 && (
         <table border={1} cellPadding={8}>
           <thead>
             <tr>
               <th>ID</th>
-              <th>Référence</th>
+              <th>Reference</th>
               <th>Date</th>
-              <th>Total Payé</th>
-              <th>Paiement</th>
-              <th>Statut</th>
+              <th>Total Paid</th>
+              <th>Payment</th>
+              <th>Status</th>
               <th>Option</th>
             </tr>
           </thead>
           <tbody>
-            {orders.map((o) => (
-              <tr key={o.id}>
-                <td>{o.id}</td>
-                <td>{o.reference}</td>
-                <td>{new Date(o.date_add).toLocaleString()}</td>
-                <td>{Number(o.total_paid).toFixed(2)} EUR</td>
-                <td>{o.payment}</td>
-                <td>{states[o.current_state] || `État ${o.current_state}`}</td>
-                <button onClick={()=>  showInput(o)}>Dupliquer</button>
+            {orders.map((order) => (
+              <tr key={order.id}>
+                <td>{order.id}</td>
+                <td>{order.reference}</td>
+                <td>{new Date(order.date_add).toLocaleString()}</td>
+                <td>{Number(order.total_paid || 0).toFixed(2)}</td>
+                <td>{order.payment}</td>
+                <td>{states[order.current_state] || "Etat " + order.current_state}</td>
+                <td>
+                  <button onClick={() => openModal(order)}>Duplicate</button>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       )}
-      <br />
-      <button onClick={() => navigate("/frontoffice/produits")}>
-        Retour à la boutique
-      </button>
     </div>
   );
 };

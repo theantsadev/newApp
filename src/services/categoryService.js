@@ -1,5 +1,5 @@
 import { requestXml, deleteOne, postXml, fetchIdByFilter } from "./prestashopClient";
-import { parseXmlToJson, getValue, buildLangXml, slugify } from "../shared/xmlUtils";
+import { parseXmlToJson, getValue, buildLangXml, slugify, ensureArray } from "../shared/xmlUtils";
 
 const ressource = "categories";
 
@@ -8,12 +8,8 @@ const ressource = "categories";
 // ─────────────────────────────────────────────
 
 export const parseCategory = (category) => {
-    const products = category.associations?.products?.product;
-    const productsList = Array.isArray(products)
-        ? products
-        : products
-            ? [products]
-            : [];
+  const products = category.associations?.products?.product;
+  const productsList = ensureArray(products);
 
     return {
         id:          getValue(category.id),
@@ -38,9 +34,10 @@ export const parseCategory = (category) => {
 
 export const fetchCategoryList = async () => {
     const xmlText = await requestXml(`${ressource}?display=full`);
-    const categories = parseXmlToJson(xmlText)?.prestashop?.categories?.category || [];
+  const categories = parseXmlToJson(xmlText)?.prestashop?.categories?.category;
+  const categoryList = ensureArray(categories);
     // La catégorie racine (id=1) est exclue car elle n'est pas exploitable métier
-    return categories
+  return categoryList
         .filter((category) => category.id != 1)
         .map(parseCategory);
 };

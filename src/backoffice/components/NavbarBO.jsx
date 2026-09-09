@@ -1,7 +1,16 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { clearStoredApiKey } from "../../shared/authStorage";
+
+
 
 const NavbarBO = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    clearStoredApiKey();
+    navigate("/backoffice/login");
+  };
 
   return (
     <nav style={styles.nav}>
@@ -17,6 +26,9 @@ const NavbarBO = () => {
           <Link to="/backoffice/stock" style={{...styles.navLink, ...(location.pathname === "/backoffice/stock" ? styles.activeNavLink : {})}}>Gestion du Stock</Link>
           <Link to="/backoffice/import-data" style={{...styles.navLink, ...(location.pathname === "/backoffice/import-data" ? styles.activeNavLink : {})}}>Import Données</Link>
           <Link to="/backoffice/reset-data" style={{...styles.navLink, ...(location.pathname === "/backoffice/reset-data" ? styles.activeNavLink : {})}}>Réinitialiser</Link>
+          <button onClick={handleLogout} style={styles.logoutButton}>
+            Déconnexion
+          </button>
         </div>
       </div>
     </nav>
@@ -70,6 +82,17 @@ const styles = {
     color: "#3b82f6",
     background: "#eff6ff",
     fontWeight: "600",
+  },
+  logoutButton: {
+    background: "transparent",
+    border: "1px solid #e2e8f0",
+    color: "#64748b",
+    padding: "6px 12px",
+    borderRadius: "6px",
+    cursor: "pointer",
+    fontSize: "0.8rem",
+    fontWeight: "500",
+    transition: "all 0.2s ease",
   },
 };
 
